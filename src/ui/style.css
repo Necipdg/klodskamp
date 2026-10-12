@@ -1,0 +1,401 @@
+:root {
+  --panel: rgba(14, 18, 24, 0.74);
+  --panel-solid: #12161d;
+  --line: rgba(242, 193, 78, 0.28);
+  --gold: #f2c14e;
+  --gold-dim: #b8913a;
+  --text: #f3ead8;
+  --muted: #b5aa93;
+  --team-a: #f07a32;
+  --team-d: #4a90f0;
+  --danger: #ff5a4a;
+  --ok: #6dde8a;
+  --pixel: 'Silkscreen', 'Press Start 2P', 'Courier New', monospace;
+  --cond: 'Barlow Condensed', 'Oswald', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; background: #0d1015; color: var(--text); font-family: var(--cond); }
+canvas#game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; image-rendering: auto; }
+#ui { position: fixed; inset: 0; pointer-events: none; user-select: none; }
+#ui .interactive, #ui button, #ui input, #ui select, #ui label { pointer-events: auto; }
+.hidden { display: none !important; }
+
+/* ---------- Fælles byggeklodser ---------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(3px);
+}
+.btn {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 13px 18px; margin: 0 0 9px;
+  background: linear-gradient(90deg, rgba(30, 36, 44, 0.92), rgba(20, 24, 30, 0.85));
+  border: 1px solid var(--line); border-left: 4px solid var(--gold-dim);
+  color: var(--text); font: 600 21px/1 var(--cond); letter-spacing: 2px; text-transform: uppercase;
+  cursor: pointer; text-align: left; transition: transform 0.08s, border-color 0.12s, background 0.12s;
+}
+.btn:hover, .btn:focus-visible { border-left-color: var(--gold); background: linear-gradient(90deg, rgba(52, 56, 48, 0.95), rgba(26, 30, 34, 0.9)); transform: translateX(4px); outline: none; }
+.btn .key { margin-left: auto; font: 12px var(--pixel); color: var(--muted); letter-spacing: 0; }
+.btn.team-a { border-left-color: var(--team-a); }
+.btn.team-d { border-left-color: var(--team-d); }
+.btn.primary { border-left-color: var(--ok); }
+.btn.small { font-size: 17px; padding: 10px 14px; }
+.label { font: 600 13px var(--cond); letter-spacing: 2.5px; text-transform: uppercase; color: var(--gold); }
+.muted { color: var(--muted); }
+h1.title { font: 400 64px/0.95 var(--pixel); margin: 0; color: #fff3d6; text-shadow: 0 4px 0 #6b4a1e, 0 8px 18px rgba(0, 0, 0, 0.5); letter-spacing: 2px; }
+h2.heading { font: 400 30px/1 var(--pixel); margin: 0 0 6px; color: #fff3d6; text-shadow: 0 3px 0 #5a3f1a; }
+
+/* ---------- Startskærm ---------- */
+#menu { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 10, 14, 0.82) 0%, rgba(8, 10, 14, 0.55) 34%, rgba(8, 10, 14, 0) 62%); }
+#menu .col { position: absolute; left: 6vw; top: 50%; transform: translateY(-50%); width: min(400px, 88vw); }
+#menu .tag { margin: 14px 0 26px; font: 500 17px/1.4 var(--cond); color: #e6dcc6; letter-spacing: 0.5px; max-width: 360px; }
+#menu .seg { display: flex; gap: 0; margin: 4px 0 16px; }
+#menu .seg button { flex: 1; padding: 9px 0; background: rgba(20, 24, 30, 0.85); border: 1px solid var(--line); color: var(--muted); font: 600 16px var(--cond); letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
+#menu .seg button.on { color: #1b1408; background: var(--gold); border-color: var(--gold); }
+#menu .smallrow { display: flex; gap: 10px; }
+#menu .smallrow .btn { flex: 1; }
+@media (max-height: 760px) { #menu .pane .info { display: none; } }
+#menu .foot { position: absolute; left: 6vw; bottom: 22px; font: 14px var(--cond); color: var(--muted); letter-spacing: 0.5px; }
+#menu .mapcard { position: absolute; right: 5vw; bottom: 8vh; width: 290px; padding: 16px 18px; border-left: 4px solid var(--gold); }
+#menu .mapcard canvas { width: 100%; image-rendering: pixelated; margin-top: 8px; border: 1px solid var(--line); }
+#menu .mapcard p { margin: 6px 0 0; font: 15px/1.35 var(--cond); color: #e6dcc6; }
+
+/* ---------- Overlays (pause, styring, køb, slut) ---------- */
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6, 8, 12, 0.55); }
+.card { width: min(560px, 92vw); padding: 26px 30px 22px; border-top: 3px solid var(--gold); background: rgba(16, 20, 26, 0.94); border-left: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); }
+.card .sub { margin: 4px 0 18px; color: var(--muted); font: 16px var(--cond); }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 6px 0 18px; font: 17px/1.25 var(--cond); }
+.keys .k { justify-self: end; font: 12px/1.6 var(--pixel); color: var(--gold); white-space: nowrap; }
+.goal { padding: 10px 14px; margin: 0 0 16px; background: rgba(242, 193, 78, 0.08); border-left: 3px solid var(--gold); font: 16px/1.4 var(--cond); }
+.goal.team-a { border-left-color: var(--team-a); background: rgba(240, 122, 50, 0.1); }
+.goal.team-d { border-left-color: var(--team-d); background: rgba(74, 144, 240, 0.1); }
+.setting { display: grid; grid-template-columns: 150px 1fr 48px; align-items: center; gap: 12px; margin: 10px 0; font: 16px var(--cond); }
+.setting input[type=range] { accent-color: var(--gold); width: 100%; }
+.setting .v { font: 12px var(--pixel); color: var(--gold); text-align: right; }
+.setting .seg { display: flex; }
+.setting .seg button { flex: 1; padding: 6px 0; background: rgba(20, 24, 30, 0.85); border: 1px solid var(--line); color: var(--muted); font: 600 14px var(--cond); letter-spacing: 1px; text-transform: uppercase; cursor: pointer; }
+.setting .seg button.on { background: var(--gold); color: #1b1408; }
+
+/* ---------- Købsmenu ---------- */
+#buy .card, #huntshop .card { width: min(760px, 94vw); }
+:is(#buy .head, #huntshop .head) { display: flex; align-items: baseline; justify-content: space-between; }
+:is(#buy .money, #huntshop .money) { font: 26px var(--pixel); color: var(--ok); }
+:is(#buy .grid, #huntshop .grid) { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 14px; }
+:is(#buy .item, #huntshop .item) { position: relative; display: flex; flex-direction: column; padding: 10px 12px 12px; background: rgba(28, 33, 41, 0.92); border: 1px solid var(--line); border-left: 4px solid var(--gold-dim); color: var(--text); cursor: pointer; text-align: left; font-family: var(--cond); }
+:is(#buy .item:hover, #huntshop .item:hover) { border-left-color: var(--gold); background: rgba(44, 48, 46, 0.95); }
+:is(#buy .item.no, #huntshop .item.no) { opacity: 0.45; }
+:is(#buy .item.owned, #huntshop .item.owned) { border-left-color: var(--ok); }
+#buy .item img { height: 64px; object-fit: contain; image-rendering: pixelated; margin: 2px 0 6px; }
+:is(#buy .item .n, #huntshop .item .n) { font: 600 19px var(--cond); letter-spacing: 1px; text-transform: uppercase; }
+:is(#buy .item .d, #huntshop .item .d) { font: 14px var(--cond); color: var(--muted); margin-top: 2px; }
+:is(#buy .item .p, #huntshop .item .p) { position: absolute; right: 10px; top: 10px; font: 14px var(--pixel); color: var(--ok); }
+:is(#buy .item .kk, #huntshop .item .kk) { position: absolute; left: 10px; top: 8px; font: 12px var(--pixel); color: var(--gold); }
+:is(#buy .msg, #huntshop .msg) { min-height: 22px; margin-top: 10px; font: 16px var(--cond); color: var(--gold); }
+:is(#buy .timer, #huntshop .timer) { font: 14px var(--pixel); color: var(--muted); }
+
+/* ---------- HUD ---------- */
+#hud, #hunthud { position: absolute; inset: 0; }
+:is(#hud, #hunthud) .radarbox { position: absolute; left: 18px; top: 18px; padding: 6px; }
+:is(#hud, #hunthud) .radarbox canvas { display: block; width: 190px; height: 190px; image-rendering: pixelated; }
+:is(#hud, #hunthud) .money { position: absolute; left: 18px; top: 228px; padding: 6px 12px; font: 22px var(--pixel); color: var(--ok); border-left: 3px solid var(--ok); }
+:is(#hud, #hunthud) .money .delta { font: 14px var(--pixel); color: var(--gold); margin-left: 8px; }
+:is(#hud, #hunthud) .top { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; gap: 0; }
+:is(#hud, #hunthud) .top .sc { width: 74px; padding: 6px 0 4px; text-align: center; font: 30px/1 var(--pixel); }
+:is(#hud, #hunthud) .top .sc.a { color: var(--team-a); border-bottom: 3px solid var(--team-a); }
+:is(#hud, #hunthud) .top .sc.d { color: var(--team-d); border-bottom: 3px solid var(--team-d); }
+:is(#hud, #hunthud) .top .sc small { display: block; font: 600 11px var(--cond); letter-spacing: 2px; color: var(--muted); margin-top: 4px; }
+:is(#hud, #hunthud) .top .clock { min-width: 128px; padding: 8px 14px 4px; text-align: center; font: 28px/1 var(--pixel); color: var(--text); border-bottom: 3px solid var(--gold-dim); }
+:is(#hud, #hunthud) .top .clock.bomb { color: var(--danger); border-bottom-color: var(--danger); animation: pulse 1s infinite; }
+:is(#hud, #hunthud) .top .clock small { display: block; font: 600 11px var(--cond); letter-spacing: 2px; color: var(--muted); margin-top: 4px; }
+:is(#hud, #hunthud) .pips { position: absolute; top: 78px; left: 50%; transform: translateX(-50%); display: flex; gap: 22px; }
+:is(#hud, #hunthud) .pips span { display: inline-block; width: 12px; height: 12px; margin: 0 2px; border: 1px solid rgba(0,0,0,0.4); }
+:is(#hud, #hunthud) .pips .dead { opacity: 0.25; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+
+:is(#hud, #hunthud) .vitals { position: absolute; left: 18px; bottom: 18px; display: flex; gap: 0; }
+:is(#hud, #hunthud) .vital { min-width: 150px; padding: 8px 14px 10px; }
+:is(#hud, #hunthud) .vital .row { display: flex; align-items: center; gap: 10px; }
+:is(#hud, #hunthud) .vital .num { font: 34px/1 var(--pixel); }
+:is(#hud, #hunthud) .vital .bar { height: 6px; margin-top: 7px; background: rgba(255, 255, 255, 0.12); }
+:is(#hud, #hunthud) .vital .bar i { display: block; height: 100%; background: var(--text); transition: width 0.15s; }
+:is(#hud, #hunthud) .vital.hp { border-left: 3px solid var(--danger); }
+:is(#hud, #hunthud) .vital.hp.low .num { color: var(--danger); animation: pulse 0.8s infinite; }
+:is(#hud, #hunthud) .vital.hp .bar i { background: linear-gradient(90deg, #ff6a50, #ffb04a); }
+:is(#hud, #hunthud) .vital.ar { border-left: 3px solid #8fb6d8; }
+:is(#hud, #hunthud) .vital.ar .bar i { background: #8fb6d8; }
+:is(#hud, #hunthud) svg.ico { width: 22px; height: 22px; image-rendering: pixelated; shape-rendering: crispEdges; }
+
+:is(#hud, #hunthud) .weapon { position: absolute; right: 18px; bottom: 18px; min-width: 230px; padding: 8px 16px 10px; text-align: right; border-right: 3px solid var(--gold); }
+:is(#hud, #hunthud) .weapon .ammo { font: 40px/1 var(--pixel); }
+:is(#hud, #hunthud) .weapon .ammo small { font: 20px var(--pixel); color: var(--muted); }
+:is(#hud, #hunthud) .weapon .ammo.low { color: var(--danger); }
+:is(#hud, #hunthud) .weapon .name { font: 600 15px var(--cond); letter-spacing: 2px; text-transform: uppercase; color: var(--gold); margin-top: 4px; }
+:is(#hud, #hunthud) .slots { position: absolute; right: 18px; bottom: 112px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+:is(#hud, #hunthud) .slots div { padding: 3px 10px; font: 600 14px var(--cond); letter-spacing: 1px; text-transform: uppercase; color: var(--muted); background: rgba(14, 18, 24, 0.5); border-right: 2px solid transparent; }
+:is(#hud, #hunthud) .slots div b { font: 10px var(--pixel); color: var(--gold-dim); margin-right: 8px; }
+:is(#hud, #hunthud) .slots div.on { color: var(--text); background: rgba(14, 18, 24, 0.8); border-right-color: var(--gold); }
+
+:is(#hud, #hunthud) .feed { position: absolute; right: 18px; top: 18px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+:is(#hud, #hunthud) .feed div { padding: 5px 10px; font: 600 16px var(--cond); background: rgba(14, 18, 24, 0.72); border: 1px solid transparent; transition: opacity 0.4s; }
+:is(#hud, #hunthud) .feed div.mine { border-color: var(--danger); }
+:is(#hud, #hunthud) .feed .w { color: var(--muted); margin: 0 8px; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
+:is(#hud, #hunthud) .feed .a { color: var(--team-a); } :is(#hud, #hunthud) .feed .d { color: var(--team-d); }
+:is(#hud, #hunthud) .feed .hs { color: var(--gold); margin-right: 6px; font-family: var(--pixel); font-size: 10px; }
+
+:is(#hud, #hunthud) .cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+:is(#hud, #hunthud) .cross i { position: absolute; background: #f6fff4; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); }
+:is(#hud, #hunthud) .cross .dot { width: 2px; height: 2px; left: -1px; top: -1px; }
+:is(#hud, #hunthud) .hitm { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; opacity: 0; transition: opacity 0.15s; }
+:is(#hud, #hunthud) .hitm.on { opacity: 1; transition: none; }
+:is(#hud, #hunthud) .hitm i { position: absolute; width: 9px; height: 2px; background: #fff; left: 50%; top: 50%; }
+:is(#hud, #hunthud) .hitm.kill i { background: var(--danger); }
+:is(#hud, #hunthud) .progress { position: absolute; left: 50%; top: calc(50% + 70px); width: 280px; transform: translateX(-50%); padding: 8px 12px 10px; text-align: center; }
+:is(#hud, #hunthud) .progress .t { font: 600 16px var(--cond); letter-spacing: 2px; text-transform: uppercase; }
+:is(#hud, #hunthud) .progress .b { height: 8px; margin-top: 6px; background: rgba(255, 255, 255, 0.15); }
+:is(#hud, #hunthud) .progress .b i { display: block; height: 100%; width: 0; background: var(--gold); }
+:is(#hud, #hunthud) .hint { position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); padding: 7px 16px; font: 600 17px var(--cond); letter-spacing: 1px; text-align: center; white-space: nowrap; }
+:is(#hud, #hunthud) .hint b { color: var(--gold); font-family: var(--pixel); font-size: 12px; margin: 0 2px; }
+:is(#hud, #hunthud) .hint.warn { color: #ffd7a0; border-left: 3px solid var(--danger); }
+:is(#hud, #hunthud) .banner { position: absolute; left: 50%; top: 21%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 0.35s, transform 0.35s; }
+:is(#hud, #hunthud) .banner.on { opacity: 1; }
+:is(#hud, #hunthud) .banner .big { font: 400 46px/1 var(--pixel); color: #fff3d6; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.5); white-space: nowrap; }
+:is(#hud, #hunthud) .banner .big.a { color: var(--team-a); } :is(#hud, #hunthud) .banner .big.d { color: var(--team-d); } :is(#hud, #hunthud) .banner .big.red { color: var(--danger); }
+:is(#hud, #hunthud) .banner .small { margin-top: 10px; font: 600 20px var(--cond); letter-spacing: 2px; text-transform: uppercase; color: #efe4cc; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+:is(#hud, #hunthud) .hurt { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(170, 20, 10, 0.55) 100%); opacity: 0; }
+:is(#hud, #hunthud) .dirs { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+:is(#hud, #hunthud) .dirs i { position: absolute; left: -40px; top: -150px; width: 80px; height: 14px; border-top: 5px solid rgba(255, 70, 50, 0.85); border-radius: 50% 50% 0 0; transform-origin: 40px 150px; transition: opacity 0.6s; }
+:is(#hud, #hunthud) .spec { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); padding: 10px 22px; font: 600 18px var(--cond); letter-spacing: 1px; text-align: center; }
+:is(#hud, #hunthud) .spec b { color: var(--gold); }
+:is(#hud, #hunthud) .note { position: absolute; left: 50%; top: calc(50% + 40px); transform: translateX(-50%); font: 600 16px var(--cond); color: #ffd7a0; text-shadow: 0 1px 4px #000; letter-spacing: 1px; }
+
+#scoreboard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, 94vw); padding: 18px 22px; }
+#scoreboard table { width: 100%; border-collapse: collapse; font: 17px var(--cond); }
+#scoreboard th { text-align: left; font: 600 12px var(--cond); letter-spacing: 2px; color: var(--muted); text-transform: uppercase; padding: 4px 6px; }
+#scoreboard td { padding: 5px 6px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+#scoreboard td.n { font-weight: 600; }
+#scoreboard tr.me td { background: rgba(242, 193, 78, 0.1); }
+#scoreboard tr.dead td { opacity: 0.45; }
+.bombtag { margin-left: 6px; padding: 1px 5px; font: 9px var(--pixel); color: #1b1408; background: var(--team-a); vertical-align: middle; }
+#scoreboard .tt { font: 400 18px var(--pixel); margin: 10px 0 4px; }
+
+#matchend .card { width: min(620px, 94vw); text-align: center; }
+#matchend .res { font: 400 64px/1 var(--pixel); margin: 6px 0 4px; }
+#matchend .score { font: 30px var(--pixel); margin: 6px 0 16px; }
+#matchend .btns { display: flex; gap: 12px; margin-top: 18px; }
+
+@media (max-width: 900px) {
+  h1.title { font-size: 44px; }
+  #menu .mapcard { display: none; }
+  :is(#hud, #hunthud) .radarbox canvas { width: 130px; height: 130px; }
+  :is(#hud, #hunthud) .money { top: 166px; }
+}
+
+/* ---------- Kæmpejagt ---------- */
+#hunthud .wave { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; border-bottom: 3px solid var(--danger); }
+#hunthud .wave .w { padding: 10px 14px 6px; font: 18px/1 var(--pixel); color: var(--gold); border-right: 1px solid var(--line); display: flex; align-items: center; }
+#hunthud .wave .w span { color: var(--muted); font-size: 14px; }
+#hunthud .wave .c { min-width: 150px; padding: 6px 14px 4px; text-align: center; font: 28px/1 var(--pixel); }
+#hunthud .wave .c small { display: block; font: 600 11px var(--cond); letter-spacing: 2px; color: var(--muted); margin-top: 4px; }
+#hunthud .wave.brk { border-bottom-color: var(--ok); }
+#hunthud .boss { position: absolute; top: 86px; left: 50%; transform: translateX(-50%); width: 340px; text-align: center; }
+#hunthud .boss .n { font: 600 14px var(--cond); letter-spacing: 3px; text-transform: uppercase; color: #ffd7a0; text-shadow: 0 1px 3px #000; }
+#hunthud .boss .b { height: 8px; margin-top: 4px; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.25); }
+#hunthud .boss .b i { display: block; height: 100%; background: linear-gradient(90deg, #c2412f, #ff7a4a); transition: width 0.12s; }
+#hunthud .vital .lbl { font: 600 13px var(--cond); letter-spacing: 2px; color: var(--muted); }
+#hunthud .vital .st { margin-left: auto; font: 10px var(--pixel); color: var(--muted); }
+#hunthud .vital.gas { border-left: 3px solid #8fd0ff; min-width: 190px; }
+#hunthud .vital.gas .bar i { background: linear-gradient(90deg, #5fb4f0, #b9e6ff); }
+#hunthud .vital.gas.active .st { color: #b9e6ff; }
+#hunthud .vital.gas.low .num { color: var(--danger); }
+#hunthud .hookd { position: absolute; left: 50%; top: calc(50% + 22px); transform: translateX(-50%); font: 11px var(--pixel); color: #e8f6ff; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0,0,0,0.7); white-space: nowrap; }
+#hunthud .hookd.far { color: var(--danger); }
+#hunthud .hookd.giant { color: #ffc060; }
+#hunthud .hookd.on { color: #8fd0ff; }
+#hunthud .hitm.weak i { background: #ffc040; width: 12px; height: 3px; }
+#hunthud .pop { position: absolute; left: 50%; top: calc(50% - 64px); transform: translateX(-50%); font: 16px var(--pixel); color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); opacity: 0; transition: opacity 0.3s, top 0.3s; white-space: nowrap; }
+#hunthud .pop.on { opacity: 1; top: calc(50% - 74px); transition: none; }
+#hunthud .pop.weak { color: #ffc040; }
+#hunthud .pop.kill { color: var(--danger); font-size: 22px; }
+#hunthud .flight { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; gap: 22px; font: 18px var(--pixel); color: #f3ead8; text-shadow: 0 1px 3px #000; }
+#hunthud .flight small { font: 600 13px var(--cond); letter-spacing: 1px; color: var(--muted); }
+#hunthud .flight b { color: var(--danger); font: 12px var(--pixel); align-self: center; animation: pulse 0.8s infinite; }
+#hunthud .warns { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+#hunthud .warns i { position: absolute; left: -30px; top: -120px; width: 60px; height: 30px; transform-origin: 30px 120px; border-top: 6px solid #ff3b1f; border-radius: 50% 50% 0 0; animation: pulse 0.35s infinite; }
+#hunthud .warns i.throw { border-top-color: #ffd040; }
+#hunthud .warns i.leap { border-top-color: #ff8a2a; }
+#hunthud .warns i.rock { border-top: 4px dashed #ffd040; animation: none; }
+#hunthud .warns i b { position: absolute; left: 0; right: 0; top: -26px; text-align: center; font: 12px var(--pixel); color: #fff; text-shadow: 0 1px 2px #000; }
+#hunthud .speedfx { position: absolute; inset: 0; opacity: 0; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255, 255, 255, 0) 0deg 5deg, rgba(255, 255, 255, 0.10) 5deg 5.6deg, rgba(255, 255, 255, 0) 5.6deg 11deg);
+  -webkit-mask: radial-gradient(ellipse at center, transparent 42%, #000 85%); mask: radial-gradient(ellipse at center, transparent 42%, #000 85%); }
+#hunthud .banner .big.ok { color: var(--ok); }
+.goal.hunt { border-left-color: var(--danger); background: rgba(255, 90, 74, 0.08); }
+#huntend .card { width: min(560px, 94vw); text-align: center; }
+#huntend .res { font: 400 64px/1 var(--pixel); margin: 6px 0 14px; }
+#huntend .stats { display: grid; grid-template-columns: 1fr auto; gap: 6px 22px; margin: 0 auto 6px; max-width: 340px; text-align: left; font: 18px var(--cond); }
+#huntend .stats .v { font: 15px var(--pixel); color: var(--gold); text-align: right; }
+#huntend .btns { display: flex; gap: 12px; margin-top: 18px; }
+
+/* Startskærmens valg af spiltype */
+#menu .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 14px; }
+#menu .mode { padding: 12px 12px 10px; text-align: left; cursor: pointer; background: rgba(20, 24, 30, 0.85); border: 1px solid var(--line); border-top: 4px solid transparent; color: var(--text); font-family: var(--cond); transition: background 0.12s, border-color 0.12s; }
+#menu .mode .t { display: block; font: 600 20px/1 var(--cond); letter-spacing: 1.5px; text-transform: uppercase; }
+#menu .mode .s { display: block; margin-top: 5px; font: 14px/1.25 var(--cond); color: var(--muted); }
+#menu .mode:hover { background: rgba(40, 44, 40, 0.92); }
+#menu .mode.on { border-top-color: var(--gold); background: rgba(48, 46, 34, 0.95); }
+#menu .mode.hunt.on { border-top-color: var(--danger); }
+#menu .pane .info { margin: 0 0 12px; font: 15px/1.35 var(--cond); color: #e6dcc6; }
+.btn.hunt { border-left-color: var(--danger); }
+#ui .loading { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 28px; font: 16px var(--pixel); color: var(--gold); border-top: 3px solid var(--gold); animation: pulse 1s infinite; }
+#hunthud .gatebar { position: absolute; top: 86px; left: 50%; transform: translateX(-50%); width: 300px; padding: 5px 12px 7px; text-align: center; border-bottom: 3px solid #d9b46a; }
+#hunthud .gatebar .n { font: 600 12px var(--cond); letter-spacing: 3px; color: #f3e2b8; }
+#hunthud .gatebar .b { height: 7px; margin-top: 4px; background: rgba(0, 0, 0, 0.45); }
+#hunthud .gatebar .b i { display: block; height: 100%; background: linear-gradient(90deg, #b8823a, #f2c14e); transition: width 0.2s; }
+#hunthud .gatebar.low .b i { background: linear-gradient(90deg, #c2412f, #ff7a4a); }
+#hunthud .gatebar.low { border-bottom-color: var(--danger); }
+#hunthud .gatebar.hit { background: rgba(120, 30, 20, 0.75); }
+#hunthud .gatebar:not(.hidden) ~ .boss { top: 136px; }
+
+/* ---------- Touch (telefon/tablet) ---------- */
+canvas#game { touch-action: none; }
+#ui button { touch-action: manipulation; }
+#touch { --u: 1vmin; position: absolute; inset: 0; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+#touch .tb {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  width: calc(13 * var(--u)); height: calc(13 * var(--u)); border-radius: 50%;
+  background: rgba(14, 18, 24, 0.45); border: 2px solid rgba(242, 193, 78, 0.55); color: #f3ead8;
+  font: calc(3 * var(--u)) var(--pixel); letter-spacing: 0; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35); backdrop-filter: blur(2px);
+}
+#touch .tb.on { background: rgba(242, 193, 78, 0.55); color: #1b1408; border-color: var(--gold); }
+#touch .b-fire { width: calc(21 * var(--u)); height: calc(21 * var(--u)); right: calc(calc(3 * var(--u)) + env(safe-area-inset-right)); bottom: calc(21 * var(--u)); font-size: calc(3.6 * var(--u)); border-color: rgba(255, 90, 74, 0.8); }
+#touch .b-fire.on { background: rgba(255, 90, 74, 0.6); }
+#touch .b-jump { width: calc(15 * var(--u)); height: calc(15 * var(--u)); right: calc(calc(6 * var(--u)) + env(safe-area-inset-right)); bottom: calc(3 * var(--u)); }
+#touch .b-a2 { width: calc(16 * var(--u)); height: calc(16 * var(--u)); right: calc(calc(26 * var(--u)) + env(safe-area-inset-right)); bottom: calc(6 * var(--u)); border-color: rgba(143, 208, 255, 0.8); }
+#touch .b-a3 { right: calc(calc(27 * var(--u)) + env(safe-area-inset-right)); bottom: calc(25 * var(--u)); }
+#touch .b-a4 { right: calc(calc(27 * var(--u)) + env(safe-area-inset-right)); bottom: calc(40 * var(--u)); }
+#touch .b-reload { width: calc(11 * var(--u)); height: calc(11 * var(--u)); right: calc(calc(3 * var(--u)) + env(safe-area-inset-right)); bottom: calc(45 * var(--u)); font-size: calc(4.5 * var(--u)); }
+#touch .b-weapon { width: calc(11 * var(--u)); height: calc(11 * var(--u)); right: calc(calc(15 * var(--u)) + env(safe-area-inset-right)); bottom: calc(45 * var(--u)); font-size: calc(4.5 * var(--u)); }
+#touch .b-pause { width: calc(10 * var(--u)); height: calc(10 * var(--u)); right: calc(calc(2 * var(--u)) + env(safe-area-inset-right)); top: calc(2 * var(--u)); border-radius: 8px; }
+#touch .b-board { width: calc(14 * var(--u)); height: calc(8 * var(--u)); right: calc(calc(14 * var(--u)) + env(safe-area-inset-right)); top: calc(3 * var(--u)); border-radius: 8px; font-size: calc(2.4 * var(--u)); }
+#touch .stick { position: absolute; left: calc(calc(18 * var(--u)) + env(safe-area-inset-left)); top: calc(100% - calc(20 * var(--u))); width: calc(26 * var(--u)); height: calc(26 * var(--u)); margin: calc(-13 * var(--u)) 0 0 calc(-13 * var(--u)); border-radius: 50%; background: rgba(14, 18, 24, 0.25); border: 2px solid rgba(242, 193, 78, 0.3); opacity: 0.5; pointer-events: none; }
+#touch .stick.on { opacity: 1; }
+#touch .stick .knob { position: absolute; left: 50%; top: 50%; width: calc(11 * var(--u)); height: calc(11 * var(--u)); border-radius: 50%; background: rgba(242, 193, 78, 0.6); transform: translate(-50%, -50%); }
+
+#touch .b-shop { width: calc(24 * var(--u)); height: calc(9 * var(--u)); right: calc(calc(3 * var(--u)) + env(safe-area-inset-right)); bottom: calc(58 * var(--u)); border-radius: 8px; font-size: calc(2.6 * var(--u)); border-color: var(--ok); color: var(--ok); animation: pulse 1.4s infinite; }
+
+/* HUD med touch: plads til tommelfingrene i hjørnerne nederst */
+body.touch :is(#hud, #hunthud) .radarbox canvas { width: 104px; height: 104px; }
+body.touch :is(#hud, #hunthud) .radarbox { left: calc(8px + env(safe-area-inset-left)); top: 8px; padding: 3px; }
+body.touch :is(#hud, #hunthud) .vitals { left: 50%; bottom: 6px; transform: translateX(-50%); }
+body.touch :is(#hud, #hunthud) .vital { min-width: 92px; padding: 4px 10px 6px; }
+body.touch :is(#hud, #hunthud) .vital .num { font-size: 20px; }
+body.touch :is(#hud, #hunthud) .vital .lbl, body.touch :is(#hud, #hunthud) .vital .st { font-size: 10px; }
+body.touch :is(#hud, #hunthud) .weapon { right: calc(14vmin + env(safe-area-inset-right)); top: 8px; bottom: auto; min-width: 0; padding: 4px 10px 6px; }
+body.touch #hud .weapon { right: calc(30vmin + env(safe-area-inset-right)); }
+body.touch :is(#hud, #hunthud) .weapon .ammo { font-size: 22px; }
+body.touch :is(#hud, #hunthud) .weapon .ammo small { font-size: 12px; }
+body.touch :is(#hud, #hunthud) .weapon .name { font-size: 10px; }
+body.touch :is(#hud, #hunthud) .slots { display: none; }
+body.touch #hud .money { top: 124px; left: calc(8px + env(safe-area-inset-left)); font-size: 16px; }
+body.touch #hud .feed { top: 70px; }
+body.touch #hud .hint { bottom: 60px; font-size: 14px; }
+body.touch #hunthud .flight { bottom: 58px; font-size: 13px; }
+body.touch :is(#hud, #hunthud) .banner .big { font-size: 28px; }
+body.touch :is(#hud, #hunthud) .banner .small { font-size: 14px; }
+body.touch #hunthud .wave .c { font-size: 20px; min-width: 110px; }
+body.touch #hunthud .wave .w { font-size: 14px; }
+body.touch #hunthud .gatebar { top: 66px; width: 220px; }
+body.touch #hunthud .gatebar:not(.hidden) ~ .boss { top: 108px; }
+body.touch #hunthud .boss { top: 66px; width: 240px; }
+
+/* Lav skærmhøjde (telefon på langs): kompakte menuer der kan rulles */
+@media (max-height: 560px) {
+  #menu .col { top: 8px; transform: none; max-height: calc(100vh - 16px); overflow-y: auto; width: min(380px, 62vw); left: calc(4vw + env(safe-area-inset-left)); padding-bottom: 8px; }
+  h1.title { font-size: 34px; margin: 2px 0; }
+  #menu .tag, #menu .foot, #menu .pane .info { display: none; }
+  #menu .modes { margin: 4px 0 8px; }
+  #menu .mode { padding: 8px 10px 6px; }
+  #menu .mode .t { font-size: 16px; }
+  #menu .mode .s { font-size: 12px; }
+  .btn { padding: 9px 14px; font-size: 16px; margin-bottom: 6px; }
+  .btn.small { font-size: 14px; padding: 7px 12px; }
+  #menu .seg { margin: 2px 0 8px; }
+  #menu .seg button { padding: 6px 0; font-size: 13px; }
+  #menu .mapcard { display: block; right: calc(3vw + env(safe-area-inset-right)); bottom: auto; top: 8px; width: min(230px, 32vw); padding: 10px 12px; max-height: calc(100vh - 16px); overflow: hidden; }
+  #menu .mapcard p { display: none; }
+  #menu .mapcard .heading { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card { max-height: 94vh; overflow-y: auto; padding: 14px 18px 12px; }
+  .card .sub { margin-bottom: 8px; font-size: 14px; }
+  .keys { font-size: 13px; gap: 3px 10px; margin-bottom: 10px; }
+  .keys .k { font-size: 9px; }
+  .goal { font-size: 13px; padding: 7px 10px; margin-bottom: 8px; }
+  .heading { font-size: 20px; }
+  #buy .card { width: min(760px, 96vw); }
+  #buy .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+  #buy .item img { height: 36px; }
+  #buy .item .d { display: none; }
+  #matchend .res, #huntend .res { font-size: 40px; }
+  #matchend .card, #huntend .card { width: min(560px, 94vw); }
+  .setting { margin: 6px 0; grid-template-columns: 120px 1fr 44px; font-size: 14px; }
+}
+
+/* Telefon på højkant: bed om at dreje den */
+#rotate { display: none; }
+@media (orientation: portrait) {
+  body.touch #rotate { display: flex; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; background: #0d1015; color: var(--gold); font: 16px var(--pixel); text-align: center; padding: 24px; }
+  body.touch #rotate b { display: block; font-size: 64px; margin-bottom: 16px; animation: pulse 1.2s infinite; }
+}
+
+
+/* ---------- Kæmpejagt: mønter, opgraderinger, point og rekorder ---------- */
+#hunthud .wave .m { padding: 6px 12px 4px; border-left: 1px solid var(--line); font: 18px/1 var(--pixel); color: #ffd659; text-align: center; transition: transform 0.15s; }
+#hunthud .wave .m small { display: block; font: 600 11px var(--cond); letter-spacing: 1px; color: var(--muted); margin-top: 6px; }
+#hunthud .wave .m.up { transform: scale(1.18); color: #fff3a0; }
+#hunthud .shophint { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); padding: 6px 14px; background: rgba(14, 18, 24, 0.72); border: 1px solid var(--line); font: 14px var(--pixel); color: var(--muted); white-space: nowrap; }
+#hunthud .shophint b { color: var(--gold); }
+#hunthud .shophint.ready { color: var(--ok); border-color: var(--ok); animation: pulse 1.4s infinite; }
+#hunthud .gatebar:not(.hidden) ~ .shophint { top: 134px; }
+#huntshop { z-index: 6; }
+#huntshop .item .lv { display: flex; gap: 4px; margin: 6px 0 2px; }
+#huntshop .item .lv i { width: 22px; height: 7px; background: rgba(255, 255, 255, 0.12); border: 1px solid var(--line); }
+#huntshop .item .lv i.on { background: #ffd659; border-color: #ffd659; }
+#huntshop .item .lv.gatehp { width: 100%; height: 8px; background: rgba(255, 255, 255, 0.12); display: block; }
+#huntshop .item .lv.gatehp i { display: block; height: 100%; width: 0; background: var(--ok); border: 0; }
+#huntshop .money { color: #ffd659; }
+#huntshop .btns { display: flex; gap: 12px; margin-top: 8px; }
+#huntshop .btns .btn { flex: 1; margin: 0; }
+#huntend .points { font: 30px var(--pixel); color: #ffd659; margin: -4px 0 6px; }
+#huntend .points small { font-size: 14px; color: var(--muted); }
+#huntend .points b { display: block; font: 14px var(--pixel); margin-top: 6px; }
+#huntend .points .new { color: var(--ok); animation: pulse 1s infinite; }
+#huntend .points .place { color: var(--gold); }
+#huntend .bonus { font: 15px var(--cond); color: var(--muted); margin-bottom: 10px; }
+#huntend .bonus b { color: #ffd659; font-weight: 600; }
+#huntend table.recs { margin: 12px auto 0; border-collapse: collapse; font: 15px var(--cond); min-width: 300px; }
+#huntend table.recs th { font: 600 12px var(--cond); letter-spacing: 2px; text-transform: uppercase; color: var(--muted); padding-bottom: 4px; }
+#huntend table.recs td { padding: 2px 10px; text-align: left; }
+#huntend table.recs td.s { font: 13px var(--pixel); color: #ffd659; text-align: right; }
+#huntend table.recs tr.me td { background: rgba(242, 193, 78, 0.16); }
+#menu .mapcard .rec { margin-top: 8px; font: 14px var(--cond); color: var(--muted); }
+#menu .mapcard .rec b { color: #ffd659; font-family: var(--pixel); font-size: 13px; }
+#pause .bench { min-height: 0; margin: 4px 0; font-size: 13px; color: var(--gold); }
+body.touch #hunthud .shophint { display: none; }
+body.touch #hunthud .wave .m { font-size: 14px; padding: 4px 8px; }
+@media (max-height: 560px) {
+  /* Start-knappen bliver synlig nederst, selv når kortet skal rulles (telefon) */
+  :is(#huntintro, #intro) .card > .btn.primary { position: sticky; bottom: -12px; z-index: 2; box-shadow: 0 -10px 18px rgba(13, 16, 21, 0.95); }
+  #huntshop .card { width: min(760px, 96vw); }
+  #huntshop .grid { grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+  #huntshop .item { padding: 6px 8px 8px; }
+  #huntshop .item .n { font-size: 15px; }
+  #huntshop .item .d { display: block; font-size: 12px; line-height: 1.15; }
+  #huntshop .item .p { font-size: 11px; }
+  #huntend table.recs { font-size: 13px; margin-top: 6px; }
+  #huntend .points { font-size: 22px; }
+}
+#huntshop .item { padding-left: 30px; }
+#huntshop .item .kk { top: 13px; }
+body.touch #huntshop .item { padding-left: 10px; }
+#menu .btn.install { margin-top: 10px; width: 100%; border-left-color: var(--ok); color: var(--ok); }

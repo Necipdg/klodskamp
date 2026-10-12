@@ -1,0 +1,22 @@
+// Skærmbilleder: node scripts/shot.mjs [url] [ud-mappe] [bredde] [højde]
+import { chromium } from 'playwright-core';
+const [url = 'http://localhost:4173/', out = 'test-output', w = '1280', h = '720'] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: +w, height: +h } });
+const logs = [];
+page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && logs.push(`[${m.type()}] ${m.text()}`));
+page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+await page.goto(url);
+await page.waitForFunction(() => !!window.__kk, null, { timeout: 60000 });
+const frames = async (n) => { const f0 = await page.evaluate(() => window.__kk.state().frames); await page.waitForFunction((f) => window.__kk.state().frames >= f, f0 + n, { timeout: 180000 }); };
+await frames(3);
+const t0 = Date.now(); await frames(3); console.log('fps', (3000 / (Date.now() - t0)).toFixed(2));
+await page.screenshot({ path: `${out}/1-menu.png` });
+await page.evaluate(() => window.__kk.start('A', 'normal'));
+await frames(2);
+await page.screenshot({ path: `${out}/2-intro.png` });
+await page.evaluate(() => window.__kk.begin());
+await frames(3);
+await page.screenshot({ path: `${out}/3-spawn.png` });
+console.log(logs.join('\n'));
+await browser.close();
