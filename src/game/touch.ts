@@ -53,6 +53,8 @@ export class TouchControls {
     this.root.addEventListener('pointermove', (e) => this.move(e));
     for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) this.root.addEventListener(t, (e) => this.up(e as PointerEvent));
     this.root.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Sikkerhedsnet: når ingen fingre rører skærmen, slippes alt (hvis telefonen har tabt et "slip")
+    for (const t of ['touchend', 'touchcancel']) this.root.addEventListener(t, (e) => { if ((e as TouchEvent).touches.length === 0) this.releaseAll(); });
   }
 
   get visible() { return !this.root.classList.contains('hidden'); }

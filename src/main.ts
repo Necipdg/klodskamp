@@ -144,7 +144,7 @@ function applyTouchMode() {
   ui.touch = on;
   huntUi.touch = on;
   document.body.classList.toggle('touch', on);
-  touch.fireZone = settings.rightSide === 'skyd';
+  touch.fireZone = settings.rightTouch === 'skyd';
   touch.root.style.setProperty('--u', settings.buttons === 'lille' ? '0.85vmin' : settings.buttons === 'stor' ? '1.18vmin' : '1vmin');
   if (benchHold < performance.now()) fpsEl.hidden = !settings.showFps && !location.hash.includes('fps');
 }
@@ -362,7 +362,7 @@ function startHuntNow(map: HuntMapId, diff: Difficulty = lastHuntDiff, seed = (M
 
 function beginPlay() {
   sound.unlock();
-  if (input.touchMode && state === 'intro') setTimeout(() => (mode === 'hunt' ? huntUi : ui).note(settings.rightSide === 'skyd' ? 'Tip: tryk og træk på højre side = skyd og sigt' : 'Tip: hold SKYD og træk for at sigte, mens du skyder'), 600);
+  if (input.touchMode && state === 'intro') setTimeout(() => (mode === 'hunt' ? huntUi : ui).note(settings.rightTouch === 'skyd' ? 'Tip: tryk og træk på højre side = skyd og sigt' : settings.rightTouch === 'auto' && mode === 'hunt' ? 'Tip: sigt på en kæmpe – så skyder du af dig selv' : 'Tip: hold SKYD og træk for at sigte, mens du skyder'), 600);
   if (mode === 'hunt') { huntUi.hideIntro(); huntUi.showHud(); }
   else { ui.hideIntro(); ui.showHud(); }
   state = 'play';
@@ -611,6 +611,24 @@ function readHuntInput(h: Hunt) {
   if (input.hit('KeyQ') || input.wheel) inp.slot = p.slot === 'primary' ? 'pistol' : 'primary';
 }
 
+/** Auto-skyd (touch): skyd af sig selv, mens sigtekornet peger på en levende kæmpe inden for rækkevidde */
+const AUTO_FIRE_RANGE = 110;
+function autoFire(h: Hunt) {
+  const p = h.player;
+  const on = input.touchMode && settings.rightTouch === 'auto' && state === 'play' && p.alive && !huntUi.shopOpen && (h.phase === 'fight' || h.phase === 'break');
+  let lock = false;
+  if (on) {
+    const r = h.trace(h.eye(), dirFromYawPitch(p.yaw, p.pitch), AUTO_FIRE_RANGE, false);
+    lock = !!(r.giant && r.giant.alive);
+  }
+  huntUi.autoLock = lock;
+  if (!lock) return;
+  h.input.fire = true;
+  // Pistolen skyder ét skud pr. tryk – "tryk" igen, så snart den er klar
+  const ws = p.slot === 'primary' ? p.primary! : p.pistol;
+  if (!WEAPONS[ws.id].auto && p.fireCd <= 0) h.input.firePressed = true;
+}
+
 function handleHuntEvents(h: Hunt, events: HuntEvent[]) {
   const hs = view.huntScene;
   const me = h.player;
@@ -771,6 +789,7 @@ function huntFrame(h: Hunt, dt: number) {
   if (state === 'play') {
     mdx = input.mouseDX; mdy = input.mouseDY;
     if (h.player.alive && h.phase !== 'won') readHuntInput(h);
+    autoFire(h);
   } else if (h.coop) {
     // Sammen kører jagten videre i pausen – så skal ens figur stå stille
     Object.assign(h.input, { fwd: 0, right: 0, jump: false, hook: false, reel: false, brake: false, fire: false });

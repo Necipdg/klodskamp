@@ -94,6 +94,11 @@ Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netl
   tvinger den frem). "Drej telefonen" (højkant) bruger samme scene med drejende telefon. **Touch: hele højre side er
   kig + skyd** (`TouchControls.fireZone`, indstilling "Højre side (touch)": Kig + skyd / Kun kig). `mobile-test.mjs`
   35 tjek (CDP-touch slipper fingre efter rækkefølge – slip altid i omvendt rækkefølge eller én ad gangen).
+- v1.2.1 (12.10.2026): "Kig + skyd" skød hele tiden, når man kiggede rundt → ny standard **Auto-skyd** (indstillingen hedder nu
+  `rightTouch`: 'auto' | 'skyd' | 'kig'): højre side kigger kun; i Kæmpejagt skyder man af sig selv, mens sigtekornet peger
+  på en levende kæmpe inden for 110 m (`autoFire` i main.ts, `hunt.trace`), sigtekornet bliver rødt (`huntUi.autoLock`).
+  Taktisk kamp: Auto = kun kig (skyd med SKYD). Sikkerhedsnet i touch.ts: ingen fingre på skærmen → `releaseAll()`.
+  `mobile-test.mjs` 38 tjek.
 - Næste skridt: Necip prøver at spille sammen med familien. Mulige næste idéer: TURN-server hvis forbindelsen
   fejler på mobilnet, flere våben, co-op i taktisk kamp.
 

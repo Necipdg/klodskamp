@@ -68,9 +68,36 @@ await frames(2);
 const y1 = await ev(() => window.__kk.hunt.player.yaw);
 ok(Math.abs(y1 - y0) > 0.05, 'kig ved at trække (samtidig med styrepinden)');
 await fUp(2); await fUp(1);
-// Hele højre side skyder også (standard) – én finger
+// Auto-skyd (standard): højre side kigger uden at skyde – men sigter man på en kæmpe, skyder man af sig selv
 await frames(1);
 await ev(() => { window.__kk.hunt.player.primary.mag = 30; });
+await fDown(7, 520, 200);
+await fMove(7, 560, 200);
+await frames(3);
+ok(await ev(() => window.__kk.hunt.player.primary.mag === 30), 'Auto-skyd: kig på højre side skyder ikke ud i luften');
+await fUp(7);
+await frames(1);
+await ev(() => {
+  const h = window.__kk.hunt, p = h.player;
+  const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+  const c = h.nav.nearest(p.body.pos.x + fx * 22, p.body.pos.z + fz * 22, 6);
+  const g = h.spawnGiant({ scale: 1, hp: 99999, big: false });
+  g.pos = { x: c.x + 0.5, y: Math.max(1, h.city.floor[c.z * h.world.sx + c.x]), z: c.z + 0.5 }; g.state = 'walk'; g.computeParts();
+  window.__autoG = g;
+  p.primary.mag = 30;
+});
+let autoHit = false;
+for (let i = 0; i < 12 && !autoHit; i++) {
+  await ev(() => { const h = window.__kk.hunt, p = h.player, g = window.__autoG; const t = g.part('torso').box.tf.t, e = h.eye(); p.yaw = Math.atan2(-(t.x - e.x), -(t.z - e.z)); p.pitch = Math.atan2(t.y - e.y, Math.hypot(t.x - e.x, t.z - e.z)); });
+  await frames(1);
+  autoHit = await ev(() => window.__kk.hunt.player.primary.mag < 30);
+}
+ok(autoHit && await ev(() => document.querySelector('#hunthud .cross').classList.contains('lock')), 'Auto-skyd: sigtekornet bliver rødt på kæmpen, og man skyder af sig selv');
+await ev(() => { const h = window.__kk.hunt; h.giants = h.giants.filter((g) => g !== window.__autoG); h.player.pitch = 1.2; h.player.primary.mag = 30; });
+await frames(3);
+ok(await ev(() => window.__kk.hunt.player.primary.mag === 30 && !window.__kk.huntUi.autoLock), 'Auto-skyd: kig væk = stop');
+// "Kig + skyd": hele højre side skyder – én finger
+await ev(() => { window.__kk.touch.fireZone = true; window.__kk.hunt.player.primary.mag = 30; });
 await fDown(7, 520, 200);
 await fMove(7, 580, 190);
 await frames(4);
@@ -85,7 +112,6 @@ await fMove(8, 560, 200);
 await frames(3);
 ok(await ev(() => !window.__kk.input.mouseDown && window.__kk.hunt.player.primary.mag === 30), '"Kun kig": højre side kigger uden at skyde');
 await fUp(8);
-await ev(() => { window.__kk.touch.fireZone = true; });
 await frames(1);
 ok(await ev(() => window.__kk.input.axisX === 0 && window.__kk.input.axisY === 0), 'styrepinden slippes');
 

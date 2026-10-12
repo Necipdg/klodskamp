@@ -145,6 +145,7 @@ h2.heading { font: 400 30px/1 var(--pixel); margin: 0 0 6px; color: #fff3d6; tex
 :is(#hud, #hunthud) .feed .hs { color: var(--gold); margin-right: 6px; font-family: var(--pixel); font-size: 10px; }
 
 :is(#hud, #hunthud) .cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+#hunthud .cross.lock i { background: #ff4a3a !important; box-shadow: 0 0 6px rgba(255, 74, 58, 0.9); }
 :is(#hud, #hunthud) .cross i { position: absolute; background: #f6fff4; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); }
 :is(#hud, #hunthud) .cross .dot { width: 2px; height: 2px; left: -1px; top: -1px; }
 :is(#hud, #hunthud) .hitm { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; opacity: 0; transition: opacity 0.15s; }
