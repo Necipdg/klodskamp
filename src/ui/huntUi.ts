@@ -1,5 +1,6 @@
 // Brugerflade for Kæmpejagt: HUD (bølge, kæmper tilbage, liv, gas, ammo, krogens afstand, radar),
 // styrings-kort ved start og sejr-/nederlagsskærm. Al tekst er på dansk.
+import type { Mate } from '../net/sync';
 import { HUNT } from '../config/hunt';
 import { WEAPONS } from '../config/weapons';
 import { BLOCKS, B } from '../core/blocks';
@@ -81,6 +82,10 @@ export interface HuntUICallbacks {
   closeShop(): void;
 }
 
+/** Farver på radaren og i holdlisten (spiller 1–4) */
+export const MATE_COLOR = ['#ffffff', '#5ec8ff', '#7dff8a', '#ffb0e0'];
+const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
 export class HuntUI {
   private hud = el('div', 'hidden');
   private intro = el('div', 'overlay hidden');
@@ -106,6 +111,10 @@ export class HuntUI {
   private seen = new Set<GiantVariant>();
   /** Touch-styring (telefon/tablet) */
   touch = false;
+  /** Co-op: hvem man er (null = alene) og medspillerne lige nu */
+  coop: 'host' | 'client' | null = null;
+  mates: Mate[] = [];
+  myName = '';
 
   constructor(private cb: HuntUICallbacks) {
     const root = document.getElementById('ui')!;
@@ -149,7 +158,8 @@ export class HuntUI {
     H.note = el('div', 'note');
     H.dead = el('div', 'spec panel hidden');
     H.shopHint = el('div', 'shophint hidden');
-    this.hud.append(H.speed, H.hurt, radarBox, H.wave, H.gate, H.boss, vitals, H.weapon, H.slots, H.cross, H.hook, H.hitm, H.pop, H.flight, H.warns, H.dirs, H.banner, H.note, H.shopHint, H.dead);
+    H.team = el('div', 'team panel hidden');
+    this.hud.append(H.speed, H.hurt, radarBox, H.team, H.wave, H.gate, H.boss, vitals, H.weapon, H.slots, H.cross, H.hook, H.hitm, H.pop, H.flight, H.warns, H.dirs, H.banner, H.note, H.shopHint, H.dead);
   }
 
   // ---------- Skærme ----------
@@ -183,7 +193,7 @@ export class HuntUI {
     const s = h.stats;
     this.end.innerHTML = '';
     const c = el('div', 'card interactive');
-    c.append(el('div', 'label', `${won ? `${h.city.name} er reddet` : `${h.lostReason === 'gate' ? `${h.city.gate?.name ?? 'Porten'} faldt` : 'Du faldt'} i bølge ${Math.max(1, h.wave)} af ${h.waves.length}`} · ${h.diff.name}`));
+    c.append(el('div', 'label', `${won ? `${h.city.name} er reddet` : `${h.lostReason === 'gate' ? `${h.city.gate?.name ?? 'Porten'} faldt` : this.coop ? 'I faldt alle sammen' : 'Du faldt'} i bølge ${Math.max(1, h.wave)} af ${h.waves.length}`} · ${h.diff.name}`));
     const res = el('div', 'res', won ? 'SEJR!' : 'NEDERLAG');
     res.style.color = won ? 'var(--ok)' : 'var(--danger)';
     c.append(res);
@@ -206,9 +216,10 @@ export class HuntUI {
       c.append(tb);
     }
     const btns = el('div', 'btns');
-    const a = el('button', 'btn primary', 'Prøv igen');
+    const a = el('button', 'btn primary', this.coop === 'host' ? 'Spil igen sammen' : this.coop === 'client' ? 'Venter på værten …' : 'Prøv igen');
+    if (this.coop === 'client') (a as HTMLButtonElement).disabled = true;
     a.onclick = () => this.cb.again();
-    const m = el('button', 'btn', 'Hovedmenu');
+    const m = el('button', 'btn', this.coop ? 'Forlad spillet' : 'Hovedmenu');
     m.onclick = () => this.cb.menu();
     btns.append(a, m);
     c.append(btns);
@@ -236,6 +247,8 @@ export class HuntUI {
     this.h.hitm.classList.remove('on');
     this.h.pop.classList.remove('on');
     this.h.dead.classList.add('hidden');
+    this.h.team.classList.add('hidden');
+    this.mates = [];
   }
 
   // ---------- Opgraderinger (mellem bølgerne) ----------
@@ -253,7 +266,7 @@ export class HuntUI {
     const head = el('div', 'head');
     head.append(el('h2', 'heading', 'Opgraderinger'), el('div', 'money', `◆ ${h.coins}`));
     c.append(head);
-    c.append(el('div', 'timer', `${h.wave === 0 ? 'Første bølge' : `Bølge ${h.wave + 1}`} om ${Math.ceil(h.phaseT)} s · tiden står stille, mens menuen er åben`));
+    c.append(el('div', 'timer', this.shopTimer(h)));
     const grid = el('div', 'grid');
     UPGRADES.forEach((u, i) => {
       const lv = h.up[u.id], max = lv >= UPGRADE_MAX, cost = h.upgradeCost(u.id);
@@ -284,6 +297,10 @@ export class HuntUI {
     btns.append(go, close);
     c.append(btns);
     this.shop.append(c);
+  }
+
+  private shopTimer(h: Hunt) {
+    return `${h.wave === 0 ? 'Første bølge' : `Bølge ${h.wave + 1}`} om ${Math.ceil(h.phaseT)} s · ${this.coop ? 'mønterne er fælles – tiden løber, mens menuen er åben' : 'tiden står stille, mens menuen er åben'}`;
   }
 
   // ---------- Små signaler ----------
@@ -383,7 +400,9 @@ export class HuntUI {
     }
     if (this.shopOpen) {
       const t = this.shop.querySelector('.timer');
-      if (t) t.textContent = `${h.wave === 0 ? 'Første bølge' : `Bølge ${h.wave + 1}`} om ${Math.ceil(h.phaseT)} s · tiden står stille, mens menuen er åben`;
+      if (t) t.textContent = this.shopTimer(h);
+      const mo = this.shop.querySelector('.money');
+      if (mo) mo.textContent = `◆ ${h.coins}`;
     }
     // Borgporten
     if (h.gate) {
@@ -478,9 +497,23 @@ export class HuntUI {
     if (this.bannerT > 0) { this.bannerT -= dt; if (this.bannerT <= 0) H.banner.classList.remove('on'); }
     if (this.noteT > 0) { this.noteT -= dt; H.note.style.opacity = String(Math.min(1, this.noteT * 2)); }
     H.dead.classList.toggle('hidden', p.alive);
-    if (!p.alive) H.dead.innerHTML = 'Du er faldet';
+    if (!p.alive) H.dead.innerHTML = this.coop && h.phase !== 'lost' && h.phase !== 'won' ? `Du er slået ud – tilbage om <b>${Math.max(1, Math.ceil(h.respawnT))} s</b>` : 'Du er faldet';
+    this.drawTeam(h);
 
     this.drawRadar(h, viewYaw);
+  }
+
+  /** Co-op: holdet med liv (eller hvornår de er tilbage) */
+  private drawTeam(h: Hunt) {
+    const T = this.h.team;
+    if (!this.coop) { T.classList.add('hidden'); return; }
+    T.classList.remove('hidden');
+    const row = (pid: number, name: string, hp: number, alive: boolean, rt: number, me: boolean) =>
+      `<div class="m${alive ? '' : ' down'}${me ? ' me' : ''}"><i style="background:${MATE_COLOR[pid % MATE_COLOR.length]}"></i><span class="n">${esc(name)}</span>` +
+      (alive ? `<span class="b"><u style="width:${Math.max(0, Math.min(100, hp))}%"></u></span>` : `<span class="d">NEDE${rt > 0 ? ` ${Math.ceil(rt)} s` : ''}</span>`) + '</div>';
+    const p = h.player;
+    const html = row(h.localPid, this.myName || 'Dig', p.hp, p.alive, h.respawnT, true) + this.mates.map((m) => row(m.pid, m.name, m.hp, m.alive, m.respawn, false)).join('');
+    if (T.innerHTML !== html) T.innerHTML = html;
   }
 
   private drawRadar(h: Hunt, yaw: number) {
@@ -533,6 +566,16 @@ export class HuntUI {
       }, g.pos.x, g.pos.z);
     }
     for (const r of h.rocks) up(() => { ctx.fillStyle = '#ffd040'; ctx.fillRect(-2, -2, 4, 4); }, r.pos.x, r.pos.z);
+    // Medspillere
+    for (const m of this.mates) {
+      ctx.save();
+      ctx.translate(m.pos.x * S, m.pos.z * S);
+      ctx.rotate(-m.yaw);
+      ctx.globalAlpha = m.alive ? 1 : 0.45;
+      ctx.fillStyle = MATE_COLOR[m.pid % MATE_COLOR.length]; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4.5, 5); ctx.lineTo(0, 2.5); ctx.lineTo(-4.5, 5); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
     ctx.restore();
     // Kæmper uden for radaren: pil i kanten
     for (const g of h.giants) {

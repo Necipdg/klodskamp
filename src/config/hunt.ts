@@ -97,6 +97,10 @@ export const HUNT = {
   /** Sekunder en kæmpe forfølger spilleren efter at være blevet ramt */
   aggroOnHit: 8,
 
+  // ---- Co-op ----
+  respawnTime: 10, // sekunder man er nede, før man er tilbage ved startpunktet
+  coopHpPerPlayer: 0.3, // kæmperne får +30 % liv pr. ekstra spiller
+
   // ---- Bølger ----
   breakTime: 9,
   depotCooldown: 18,

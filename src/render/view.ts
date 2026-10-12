@@ -16,6 +16,8 @@ import type { Hunt } from '../hunt/hunt';
 import { HuntScene } from './huntView';
 import { Giant } from '../hunt/giant';
 import { GiantView, rockMaterial } from './giantView';
+import { makeHuntPlayer } from '../hunt/hunt';
+import type { Mate } from '../net/sync';
 
 export type CamMode = { mode: 'first' } | { mode: 'orbit' } | { mode: 'spectate'; pid: number };
 
@@ -30,6 +32,8 @@ export class GameView {
   private worldR: WorldRenderer | null = null;
   private dynamic = new THREE.Group();
   private chars = new Map<number, Character>();
+  /** Co-op: medspillernes figurer og wirer */
+  private mates = new Map<number, { c: Character; p: Player; rope: THREE.Line }>();
   vm: ViewModel | null = null;
   fx: Effects | null = null;
   private game: Game | null = null;
@@ -235,6 +239,7 @@ export class GameView {
     this.hunt = null;
     this.dynamic.clear();
     this.chars.clear();
+    this.mates.clear();
     this.worldR = null;
     this.fx = null;
     this.vm = null;
@@ -242,6 +247,43 @@ export class GameView {
   }
 
   character(pid: number) { return this.chars.get(pid); }
+
+  /** Co-op: sæt medspillernes figurer (kaldes hvert billede før render) */
+  setMates(list: Mate[]) {
+    for (const m of list) {
+      let e = this.mates.get(m.pid);
+      if (!e) {
+        const p = makeHuntPlayer(m.pos, m.yaw);
+        p.id = m.pid;
+        p.name = m.name;
+        p.team = m.pid % 2 ? 'D' : 'A';
+        const c = new Character(p, true);
+        const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+        const rope = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x2b2722 }));
+        rope.frustumCulled = false;
+        this.dynamic.add(c.root, rope);
+        e = { c, p, rope };
+        this.mates.set(m.pid, e);
+      }
+      const p = e.p;
+      p.body.pos = { ...m.pos }; p.prevPos = { ...m.pos }; p.body.vel = { ...m.vel }; p.body.onGround = m.onGround;
+      p.yaw = m.yaw; p.pitch = m.pitch; p.alive = m.alive; p.slot = m.slot; p.hp = m.hp;
+      const r = e.rope;
+      r.visible = !!m.hook && m.alive;
+      if (m.hook) {
+        const a = r.geometry.getAttribute('position') as THREE.BufferAttribute;
+        a.setXYZ(0, m.pos.x, m.pos.y + 1.05, m.pos.z);
+        a.setXYZ(1, m.hook.x, m.hook.y, m.hook.z);
+        a.needsUpdate = true;
+      }
+    }
+    for (const [pid, e] of this.mates) {
+      if (list.some((m) => m.pid === pid)) continue;
+      this.dynamic.remove(e.c.root, e.rope);
+      this.mates.delete(pid);
+    }
+  }
+  mateShot(pid: number) { this.mates.get(pid)?.c.onShot(); }
 
   render(dt: number, alpha: number, cam: CamMode, mouseDX = 0, mouseDY = 0) {
     if (this.hunt) { this.renderHunt(dt, alpha, cam, mouseDX, mouseDY); return; }
@@ -326,6 +368,10 @@ export class GameView {
       this.camera.position.z += (Math.random() - 0.5) * s;
     }
     this.camera.updateMatrixWorld();
+    for (const e of this.mates.values()) {
+      e.c.markerOk = this.camera.position.distanceTo(e.c.root.position) > 2.5;
+      e.c.update(dt, 1);
+    }
     this.applyDay(h.dayTime());
     hs.update(dt, this.camera, first, this.night);
     // Solens skyggeboks følger spilleren (afrundet, så skyggerne ikke flimrer)

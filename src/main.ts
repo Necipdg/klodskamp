@@ -28,6 +28,9 @@ import { HUNT_MAPS, buildHuntMap } from './hunt/maps';
 import { HUNT_DIFF, UPGRADES } from './hunt/progress';
 import { addRecord, getRecords, today } from './game/records';
 import * as THREE from 'three';
+import { CoopSession, cleanCode, type NetMsg } from './net/coop';
+import { ClientSync, HostSync, type NetHooks } from './net/sync';
+import { CoopUI } from './ui/coopUi';
 
 type State = 'menu' | 'intro' | 'play' | 'paused' | 'end';
 type Mode = 'tactical' | 'hunt';
@@ -112,6 +115,7 @@ function benchmark(): string {
 const ui = new UI(settings, {
   start: (team, diff) => startMatch(team, diff),
   startHunt: (m, d) => startHunt(m, true, d),
+  coop: coopCapable() ? (m, d) => openCoop(m, d) : null,
   benchmark: () => benchmark(),
   install: () => { void installApp(); },
   begin: () => beginPlay(),
@@ -174,10 +178,10 @@ function goFullscreen() {
 
 const huntUi = new HuntUI({
   begin: () => beginPlay(),
-  again: () => startHunt(lastHuntMap, true, lastHuntDiff),
+  again: () => { if (net?.role === 'host') coopStart(); else if (!net) startHunt(lastHuntMap, true, lastHuntDiff); },
   menu: () => toMenu(),
   buy: (id) => buyUpgrade(id),
-  skip: () => { hunt?.skipBreak(); closeShop(); },
+  skip: () => skipBreak(),
   closeShop: () => closeShop(),
 });
 let lastHuntMap: HuntMapId = 'ravnsdalen';
@@ -190,6 +194,11 @@ function openShop() {
   sound.ui();
   if (input.locked) { expectUnlock = true; input.unlock(); }
 }
+function skipBreak() {
+  if (clientSync && net) net.send({ t: 'skip' });
+  else hunt?.skipBreak();
+  closeShop();
+}
 function closeShop() {
   if (!huntUi.shopOpen) return;
   huntUi.closeShop();
@@ -197,6 +206,7 @@ function closeShop() {
 }
 function buyUpgrade(id: Parameters<Hunt['buyUpgrade']>[0]) {
   if (!hunt) return;
+  if (clientSync && net) { net.send({ t: 'buy', id }); return; } // værten regner købet (fælles mønter)
   const r = hunt.buyUpgrade(id);
   if (r.ok) sound.buy(); else sound.denied();
   huntUi.renderShop(hunt, r.msg);
@@ -226,6 +236,8 @@ function applySettings(s: Settings) {
 
 /** Ryd alt fra den spiltype der kører nu: fjender, lyd, input og tidsur */
 function teardown() {
+  hostSync = null;
+  clientSync = null;
   sound.stopLoops();
   sound.night = 0;
   hunt = null;
@@ -242,7 +254,8 @@ function teardown() {
   acc = 0;
 }
 
-function toMenu() {
+function toMenu(keepLink = false) {
+  leaveCoop(keepLink);
   state = 'menu';
   loadingEl.classList.add('hidden');
   input.unlock();
@@ -293,12 +306,12 @@ function startHunt(map: HuntMapId = lastHuntMap, defer = true, diff: Difficulty 
   startHuntNow(map, diff);
 }
 
-function startHuntNow(map: HuntMapId, diff: Difficulty = lastHuntDiff) {
+function startHuntNow(map: HuntMapId, diff: Difficulty = lastHuntDiff, seed = (Math.random() * 1e6) | 0) {
   teardown();
   mode = 'hunt';
   ui.playMode = 'hunt';
   menuGame = null;
-  hunt = new Hunt((Math.random() * 1e6) | 0, map, diff);
+  hunt = new Hunt(seed, map, diff);
   view.attachHunt(hunt);
   ui.hideMenu();
   huntUi.showIntro(hunt, HUNT_DIFF[diff].name);
@@ -527,7 +540,7 @@ function readHuntInput(h: Hunt) {
   if (huntUi.shopOpen) {
     UPGRADES.forEach((u, i) => { if (input.hit(`Digit${i + 1}`) || input.hit(`Numpad${i + 1}`)) buyUpgrade(u.id); });
     if (input.hit('Digit6') || input.hit('Numpad6')) buyUpgrade('repair');
-    if (input.hit('Enter')) { h.skipBreak(); closeShop(); }
+    if (input.hit('Enter')) skipBreak();
     else if (input.hit('KeyB')) closeShop();
     else if (input.hit('Escape')) { huntUi.closeShop(); state = 'paused'; ui.showPause(); }
     Object.assign(inp, { fwd: 0, right: 0, jump: false, hook: false, reel: false, brake: false, fire: false });
@@ -605,6 +618,8 @@ function handleHuntEvents(h: Hunt, events: HuntEvent[]) {
       case 'impact': view.shake = Math.max(view.shake, 0.6); break;
       case 'hurt': sound.hurt(); buzz(Math.min(140, 30 + e.dmg * 2)); view.shake = Math.max(view.shake, Math.min(1, 0.3 + e.dmg / 50)); break;
       case 'coins': if (e.why === 'kill') buzz([40, 40, 70]); break;
+      case 'down': sound.matchEnd(false); huntUi.note(`Du er slået ud – du er tilbage om ${HUNT.respawnTime} s`); break;
+      case 'respawn': sound.depot(); huntUi.note('Du er tilbage!'); break;
       case 'upgrade': if (e.id === 'repair') sound.gateRepair(); break;
       case 'depot': {
         sound.depot();
@@ -665,33 +680,62 @@ function handleHuntEvents(h: Hunt, events: HuntEvent[]) {
   }
 }
 
-function huntFrame(h: Hunt, dt: number) {
-  let mdx = 0, mdy = 0;
-  if (state === 'play') {
-    mdx = input.mouseDX; mdy = input.mouseDY;
-    if (h.player.alive && h.phase !== 'won') readHuntInput(h);
-  }
+/** Kør jagten frem (og co-op-netværket). Bruges både af billedløkken og, når værtens fane er skjult, af en timer. */
+function huntSim(h: Hunt, dt: number) {
+  if (coopPending) return false;
   // Opgraderingsmenuen lukker, hvis pausen slutter (f.eks. "Start bølgen nu" fra en test)
   if (huntUi.shopOpen && h.phase !== 'break') closeShop();
-  // Verden kører også videre på slutskærmen (kæmper falder færdigt), men ikke i pausen eller opgraderingsmenuen
-  const running = (state === 'play' || state === 'end') && !frozen && !huntUi.shopOpen;
+  // Alene: verden kører også videre på slutskærmen (kæmper falder færdigt), men ikke i pausen eller opgraderingsmenuen.
+  // Sammen: tiden kan ikke stå stille for én spiller, så jagten kører altid.
+  const running = h.coop ? !frozen : (state === 'play' || state === 'end') && !frozen && !huntUi.shopOpen;
+  hostSync?.receive();
+  if (clientSync) {
+    const restart = clientSync.receive(dt);
+    if (restart) { coopBegin(restart); return false; }
+  }
   if (running) {
     acc += dt;
     let n = 0;
     while (acc >= HUNT.dt && n < 40) { h.step(); acc -= HUNT.dt; n++; }
     if (n >= 40) acc = 0;
-    handleHuntEvents(h, h.drainEvents());
-    if (huntEndT > 0 && state === 'play') {
-      huntEndT -= dt;
-      if (huntEndT <= 0) {
-        state = 'end';
-        expectUnlock = true;
-        input.unlock();
+  }
+  let events = h.drainEvents();
+  if (hostSync) { hostSync.outgoing(events); hostSync.flush(dt); }
+  if (clientSync) {
+    clientSync.outgoing(events);
+    clientSync.update(dt);
+    events = events.concat(clientSync.incoming.splice(0));
+    if (clientSync.silence > 3 && state !== 'end') { waitNoteT -= dt; if (waitNoteT <= 0) { waitNoteT = 2; huntUi.note('Venter på værten … (forbindelsen hakker)'); } }
+  }
+  if (running || events.length) handleHuntEvents(h, events);
+  if (running && huntEndT > 0 && state === 'play') {
+    huntEndT -= dt;
+    if (huntEndT <= 0) {
+      state = 'end';
+      expectUnlock = true;
+      input.unlock();
+      huntUi.closeShop();
+      if (h.coop) huntUi.showEnd(h);
+      else {
         const rank = addRecord(h.mapId, h.difficulty, { score: h.score, won: h.phase === 'won', wave: Math.max(1, h.wave), waves: h.waves.length, time: Math.round(h.stats.time), kills: h.stats.kills, date: today() });
         huntUi.showEnd(h, rank, getRecords(h.mapId, h.difficulty));
       }
     }
   }
+  return running;
+}
+
+function huntFrame(h: Hunt, dt: number) {
+  let mdx = 0, mdy = 0;
+  if (state === 'play') {
+    mdx = input.mouseDX; mdy = input.mouseDY;
+    if (h.player.alive && h.phase !== 'won') readHuntInput(h);
+  } else if (h.coop) {
+    // Sammen kører jagten videre i pausen – så skal ens figur stå stille
+    Object.assign(h.input, { fwd: 0, right: 0, jump: false, hook: false, reel: false, brake: false, fire: false });
+  }
+  const running = huntSim(h, dt);
+  if (hunt !== h) { input.endFrame(); return; } // ny jagt startet
   input.endFrame();
   const e = h.eye();
   sound.listener = { x: e.x, y: e.y, z: e.z, yaw: h.player.yaw };
@@ -702,9 +746,206 @@ function huntFrame(h: Hunt, dt: number) {
   if (state === 'play' && h.player.alive) sound.huntLoops(h.speed, h.boosting || h.braking, h.reeling, h.hook.state === 'attached', fallDist);
   else sound.huntLoops(0, false, false, false);
   const cam: CamMode = (state === 'play' || state === 'intro' || state === 'paused') && h.player.alive ? { mode: 'first' } : { mode: 'orbit' };
+  const mates = hostSync ? hostSync.mates(dt) : clientSync ? clientSync.mates() : [];
+  view.setMates(mates);
+  huntUi.mates = mates;
   view.render(dt, running ? acc / HUNT.dt : 1, cam, mdx, mdy);
   if (state !== 'menu') huntUi.update(h, dt, view.camera.rotation.y, h.player.alive ? h.hookAim() : null);
 }
+
+// ---------- Spil sammen (co-op over nettet) ----------
+
+let net: CoopSession | null = null;
+let hostSync: HostSync | null = null;
+let clientSync: ClientSync | null = null;
+/** En ny co-op-jagt er ved at blive bygget (beskeder venter i indbakken) */
+let coopPending = false;
+/** Tæller der gør gamle "opret/forbind"-forsøg ugyldige, hvis man har trykket Annullér */
+let coopToken = 0;
+let waitNoteT = 0;
+/** Værten: frø til den jagt der kører (sendes til gæster der kommer ind midt i) */
+let coopSeed = 0;
+
+/** Spil sammen kræver WebRTC og den almindelige udgave af spillet (ikke én-fils-versionen) */
+function coopCapable() {
+  return import.meta.env.MODE !== 'single' && typeof RTCPeerConnection !== 'undefined' && /^https?:$/.test(location.protocol);
+}
+
+const netHooks: NetHooks = {
+  remoteShot(pid, from, to, weapon) {
+    if (!hunt) return;
+    sound.shot(weapon, from, false);
+    view.mateShot(pid);
+    view.fx?.tracer(from, to, null);
+  },
+  shopReply(ok, msg) {
+    if (ok) sound.buy(); else sound.denied();
+    if (hunt && huntUi.shopOpen) huntUi.renderShop(hunt, msg);
+  },
+  note(t) { huntUi.note(t); },
+};
+
+const coopUi = new CoopUI({
+  create: (name, map, diff) => { void coopCreate(name, map, diff); },
+  join: (code, name) => { void coopJoin(code, name); },
+  start: () => coopStart(),
+  leave: () => {
+    if (net || hunt || state !== 'menu') toMenu();
+    else { leaveCoop(); ui.showMenu(menuGame); }
+  },
+});
+
+function openCoop(map: HuntMapId, diff: Difficulty) {
+  sound.unlock();
+  sound.ui();
+  ui.hideMenu();
+  coopUi.showHost(settings.name, map, diff);
+}
+
+function rememberName(name: string) {
+  if (settings.name === name) return;
+  settings.name = name;
+  saveSettings(settings);
+}
+
+function wireSession(s: CoopSession) {
+  s.onLobby = () => { if (coopUi.open) coopUi.refresh(s); };
+  s.onClose = (reason) => {
+    if (net !== s) return;
+    toMenu();
+    ui.hideMenu();
+    coopUi.showError(reason);
+  };
+  s.onJoin = (pid) => {
+    const name = s.players.find((p) => p.pid === pid)?.name ?? 'En spiller';
+    if (hunt && hostSync) { s.sendTo(pid, startMsg()); huntUi.note(`${name} er med i jagten`); sound.ui(); }
+  };
+  s.onLeave = (_pid, name) => { if (hunt) huntUi.note(`${name} har forladt spillet`); };
+}
+
+async function coopCreate(name: string, map: HuntMapId, diff: Difficulty) {
+  rememberName(name);
+  settings.huntDiff = diff;
+  saveSettings(settings);
+  lastHuntMap = map; lastHuntDiff = diff;
+  const token = ++coopToken;
+  coopUi.showBusy('Opretter rummet …');
+  try {
+    const s = await CoopSession.host(name, { map, diff });
+    if (token !== coopToken) { s.close(); return; }
+    net = s;
+    wireSession(s);
+    coopUi.showHostLobby(s);
+  } catch (e) {
+    if (token === coopToken) coopUi.showError((e as Error).message);
+  }
+}
+
+async function coopJoin(code: string, name: string) {
+  rememberName(name);
+  const token = ++coopToken;
+  coopUi.showBusy(`Forbinder til rum ${code} …`);
+  try {
+    const s = await CoopSession.join(code, name);
+    if (token !== coopToken) { s.close(); return; }
+    net = s;
+    wireSession(s);
+    coopUi.showGuestLobby(s);
+  } catch (e) {
+    if (token === coopToken) coopUi.showError((e as Error).message, () => { void coopJoin(code, name); });
+  }
+}
+
+function startMsg(): NetMsg {
+  const s = net!;
+  return { t: 'start', map: s.config.map, diff: s.config.diff, seed: coopSeed, n: s.players.length, broken: hostSync?.broken ?? [] };
+}
+
+/** Værten starter jagten (også "Spil igen sammen") */
+function coopStart() {
+  const s = net;
+  if (!s || s.role !== 'host') return;
+  s.started = true;
+  coopSeed = (Math.random() * 1e6) | 0;
+  hostSync = null; // nye gæster skal ikke have de gamle ødelagte blokke
+  const msg = startMsg();
+  s.broadcast(msg);
+  coopBegin(msg);
+}
+
+/** Byg jagten ud fra en start-besked (værten selv eller fra værten) */
+function coopBegin(msg: NetMsg) {
+  const s = net;
+  if (!s) return;
+  coopPending = true;
+  coopUi.hide();
+  huntUi.hideAll();
+  ui.hideMenu();
+  const map = msg.map as HuntMapId, diff = msg.diff as Difficulty;
+  lastHuntMap = map; lastHuntDiff = diff;
+  sound.unlock();
+  loadingEl.textContent = `Bygger ${HUNT_MAPS.find((m) => m.id === map)?.name ?? map} …`;
+  loadingEl.classList.remove('hidden');
+  setTimeout(() => {
+    coopPending = false;
+    if (net !== s) { loadingEl.classList.add('hidden'); return; }
+    huntUi.coop = s.role;
+    huntUi.myName = settings.name;
+    startHuntNow(map, diff, Number(msg.seed) || 1);
+    const h = hunt!;
+    if (s.role === 'host') {
+      h.role = 'host';
+      h.hpScale = 1 + HUNT.coopHpPerPlayer * Math.max(0, (Number(msg.n) || 1) - 1);
+      h.phaseT = 20; // tid til at læse styringen og finde hinanden
+      hostSync = new HostSync(s, h, netHooks);
+    } else {
+      h.role = 'client';
+      h.localPid = s.pid;
+      for (const [x, y, z] of (msg.broken as [number, number, number][]) ?? []) h.world.set(x, y, z, B.AIR);
+      clientSync = new ClientSync(s, h, netHooks);
+    }
+  }, 40);
+}
+
+/** Forlad rummet (værten lukker det for alle) */
+function leaveCoop(keepLink = false) {
+  coopToken++;
+  coopPending = false;
+  huntUi.coop = null;
+  coopUi.hide();
+  if (net) { net.onClose = null; net.close(); }
+  net = null;
+  hostSync = null;
+  clientSync = null;
+  if (!keepLink && new URLSearchParams(location.search).has('rum')) {
+    const u = new URL(location.href);
+    u.searchParams.delete('rum');
+    history.replaceState(null, '', u.toString());
+  }
+}
+
+/** Lobbyen: gæsten venter på "start" fra værten */
+function pollLobby() {
+  const s = net;
+  if (!s || coopPending) return;
+  const i = s.inbox.findIndex((m) => m.msg.t === 'start');
+  if (i < 0) { if (s.inbox.length > 200) s.inbox.splice(0, s.inbox.length - 50); return; }
+  const msg = s.inbox[i].msg;
+  s.inbox.splice(0, i + 1);
+  coopBegin(msg);
+}
+
+// Lukker man fanen, får de andre besked med det samme
+window.addEventListener('pagehide', () => { if (net) { net.onClose = null; net.close(); } });
+
+// Værtens fane skjult (skifter app): billedløkken stopper, men jagten skal køre videre for de andre
+let bgLast = performance.now();
+setInterval(() => {
+  const now = performance.now();
+  const dt = Math.min(1, (now - bgLast) / 1000);
+  bgLast = now;
+  if (document.hidden && hostSync && hunt) huntSim(hunt, dt);
+}, 100);
 
 // ---------- Hovedløkken ----------
 
@@ -724,6 +965,7 @@ function frame(now: number) {
   touch.show(tl);
   if (tl === 'tactical' && game) touch.setBuyVisible(game.phase === 'buy');
   if (tl === 'hunt' && hunt) touch.setBuyVisible(hunt.phase === 'break' && hunt.player.alive);
+  if (net && !hunt) pollLobby();
   if (mode === 'hunt' && hunt) { huntFrame(hunt, dt); return; }
   const g = state === 'menu' ? menuGame : game;
   if (!g) { input.endFrame(); return; }
@@ -746,7 +988,11 @@ function frame(now: number) {
     if (state === 'play' && game) handleEvents(game, game.drainEvents());
     else g.drainEvents();
     // Menu-kampen starter forfra, når den er slut
-    if (state === 'menu' && g.phase === 'over') toMenu();
+    if (state === 'menu' && g.phase === 'over') {
+      // Lobbyen til at spille sammen må ikke lukkes – start bare baggrundskampen forfra
+      if (net || coopUi.open) { menuGame = new Game({ humanTeam: 'A', difficulty: 'normal', seed: (Math.random() * 1e6) | 0, allBots: true }); view.attach(menuGame); acc = 0; }
+      else toMenu(true);
+    }
   }
   input.endFrame();
 
@@ -821,9 +1067,12 @@ async function installApp() {
   updateInstall();
 }
 
+// Åbnet fra et invitationslink (?rum=KODE): vis "Du er inviteret"
+const inviteCode = cleanCode(new URLSearchParams(location.search).get('rum') ?? '');
 applyTouchMode();
-toMenu();
+toMenu(true);
 updateInstall();
+if (inviteCode && coopCapable()) { ui.hideMenu(); coopUi.showJoin(inviteCode, settings.name); }
 requestAnimationFrame(frame);
 
 // ---------- Testkroge (bruges af scripts/*.mjs) ----------
@@ -863,6 +1112,8 @@ window.__kk = {
     for (let i = 0; i < n; i++) { hunt.step(); if (i % 12 === 0) handleHuntEvents(hunt, hunt.drainEvents()); }
     handleHuntEvents(hunt, hunt.drainEvents());
   },
+  /** Co-op: hvem er jeg, og hvor mange er i rummet */
+  coop: () => ({ role: net?.role ?? null, pid: net?.pid ?? -1, code: net?.code ?? '', players: net?.players.map((p) => p.name) ?? [], started: net?.started ?? false, mates: huntUi.mates.length }),
   look: (yaw: number, pitch: number) => { if (game) { game.human.yaw = yaw; game.human.pitch = pitch; } },
   DEG,
 };

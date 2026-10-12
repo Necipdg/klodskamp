@@ -4,7 +4,7 @@ Blokspil i browseren med to spiltyper, der vælges på startskærmen:
 
 - **Taktisk kamp:** 3 mod 3 med bots på banen **Sandgården**. Angriberne skal plante bomben på
   bombeområdet A, forsvarerne skal forhindre det – eller desarmere den. Første hold til 5 vundne runder vinder.
-- **Kæmpejagt** (v0.3–v0.9): alene mod bølger af kæmper. Sving dig mellem tårne, træer, master og tage med en
+- **Kæmpejagt** (v0.3–v1.1): alene eller op til 4 sammen mod bølger af kæmper. Sving dig mellem tårne, træer, master og tage med en
   krog, brug gas til at booste og bremse, og skyd den glødende krystal i kæmpernes nakke. Tjen mønter og køb
   opgraderinger mellem bølgerne. Tre sværhedsgrader og en rekordliste. Tre baner: eventyrdalen
   **Ravnsdalen** (standard, 5 bølger), havnebyen **Saltvig** (5 bølger) og murbyen **Bastionen** (3 bølger).
@@ -19,6 +19,27 @@ Blokspil i browseren med to spiltyper, der vælges på startskærmen:
 - **Dobbeltklik:** `spil.html` åbner i din browser – virker også uden internet.
 - **Udvikling:** `npm install` og derefter `npm run dev`. `npm run build:app` bygger app-versionen i `dist/`.
   Hvert push til `main` på GitHub bygger og udgiver appen automatisk (`.github/workflows/pages.yml`).
+
+## Spil sammen (ny i v1.1)
+
+Kæmpejagt for 2–4 spillere på samme hold – fx hele familien på hver sin telefon, tablet eller computer.
+
+1. Værten vælger **Kæmpejagt → Spil sammen**, skriver sit navn og vælger bane og sværhed → **Opret rum**.
+2. Spillet viser en kode (fx `K5JXM`) og et link. Tryk **WhatsApp**, **Del …** eller **Kopiér link** og send det.
+3. De andre trykker på linket, skriver deres navn og trykker **Gå ind**. De dukker op i værtens liste.
+4. Værten trykker **Start jagten**. Man kan også komme med midt i en jagt ved at åbne linket.
+
+- Mønter og opgraderinger er **fælles**: alle kan købe i menuen mellem bølgerne, og alle får niveauet.
+- Bliver man slået ud, er man **tilbage efter 10 sekunder** ved startpunktet. Jagten er først tabt, hvis porten
+  falder, eller **alle** er nede på samme tid. Kæmperne har 30 % mere liv for hver ekstra spiller.
+- Tiden står ikke stille i pausen eller opgraderingsmenuen, når man spiller sammen.
+- Øverst til venstre under radaren står holdet med liv; medspillerne ses som pile på radaren og med navn over hovedet.
+- Teknik: telefonerne forbindes **direkte** med hinanden (WebRTC via PeerJS). PeerJS' gratis server bruges kun til
+  at finde hinanden; der er ingen konto og intet der gemmes. Værten kører kæmperne og sender en opdatering 15 gange
+  i sekundet; hver spiller styrer selv sin egen figur. Alle skal være på nettet.
+- Begrænsninger: på nogle mobilnet (især hvis begge er på 4G/5G hos visse selskaber) kan den direkte forbindelse
+  ikke oprettes – så hjælper det at være på wifi. Lægger værten telefonen væk, går spillet i stå for alle, indtil
+  værten er tilbage. Virker ikke i én-fils-versionen `spil.html` (kun på hjemmesiden/appen).
 
 ## Saltvig – havnebyen i fjorden (ny i v0.9)
 

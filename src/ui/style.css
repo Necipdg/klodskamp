@@ -51,9 +51,9 @@ h2.heading { font: 400 30px/1 var(--pixel); margin: 0 0 6px; color: #fff3d6; tex
 #menu { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 10, 14, 0.82) 0%, rgba(8, 10, 14, 0.55) 34%, rgba(8, 10, 14, 0) 62%); }
 #menu .col { position: absolute; left: 6vw; top: 50%; transform: translateY(-50%); width: min(400px, 88vw); }
 #menu .tag { margin: 14px 0 26px; font: 500 17px/1.4 var(--cond); color: #e6dcc6; letter-spacing: 0.5px; max-width: 360px; }
-#menu .seg { display: flex; gap: 0; margin: 4px 0 16px; }
-#menu .seg button { flex: 1; padding: 9px 0; background: rgba(20, 24, 30, 0.85); border: 1px solid var(--line); color: var(--muted); font: 600 16px var(--cond); letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
-#menu .seg button.on { color: #1b1408; background: var(--gold); border-color: var(--gold); }
+#menu .seg, #coop .seg { display: flex; gap: 0; margin: 4px 0 16px; }
+#menu .seg button, #coop .seg button { flex: 1; padding: 9px 0; background: rgba(20, 24, 30, 0.85); border: 1px solid var(--line); color: var(--muted); font: 600 16px var(--cond); letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
+#menu .seg button.on, #coop .seg button.on { color: #1b1408; background: var(--gold); border-color: var(--gold); }
 #menu .smallrow { display: flex; gap: 10px; }
 #menu .smallrow .btn { flex: 1; }
 @media (max-height: 760px) { #menu .pane .info { display: none; } }
@@ -321,8 +321,8 @@ body.touch #hunthud .boss { top: 66px; width: 240px; }
   #menu .mode .s { font-size: 12px; }
   .btn { padding: 9px 14px; font-size: 16px; margin-bottom: 6px; }
   .btn.small { font-size: 14px; padding: 7px 12px; }
-  #menu .seg { margin: 2px 0 8px; }
-  #menu .seg button { padding: 6px 0; font-size: 13px; }
+  #menu .seg, #coop .seg { margin: 2px 0 8px; }
+  #menu .seg button, #coop .seg button { padding: 6px 0; font-size: 13px; }
   #menu .mapcard { display: block; right: calc(3vw + env(safe-area-inset-right)); bottom: auto; top: 8px; width: min(230px, 32vw); padding: 10px 12px; max-height: calc(100vh - 16px); overflow: hidden; }
   #menu .mapcard p { display: none; }
   #menu .mapcard .heading { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -399,3 +399,51 @@ body.touch #hunthud .wave .m { font-size: 14px; padding: 4px 8px; }
 #huntshop .item .kk { top: 13px; }
 body.touch #huntshop .item { padding-left: 10px; }
 #menu .btn.install { margin-top: 10px; width: 100%; border-left-color: var(--ok); color: var(--ok); }
+
+/* ---------- Co-op: holdet i Kæmpejagt ---------- */
+#hunthud .team { position: absolute; left: 18px; top: 228px; min-width: 150px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+#hunthud .team .m { display: flex; align-items: center; gap: 6px; font: 600 14px var(--cond); color: #f3ead6; }
+#hunthud .team .m i { width: 9px; height: 9px; border: 1px solid #000; flex: none; }
+#hunthud .team .m .n { flex: 1; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#hunthud .team .m.me .n { color: var(--gold); }
+#hunthud .team .m .b { width: 54px; height: 6px; background: rgba(0, 0, 0, 0.5); flex: none; }
+#hunthud .team .m .b u { display: block; height: 100%; background: #6dde8a; }
+#hunthud .team .m .d { font: 11px var(--pixel); color: var(--danger); }
+#hunthud .team .m.down .n { opacity: 0.55; }
+@media (max-width: 900px) { #hunthud .team { top: 168px; } }
+body.touch #hunthud .team { left: calc(8px + env(safe-area-inset-left)); top: 122px; min-width: 0; padding: 3px 6px; gap: 2px; }
+body.touch #hunthud .team .m { font-size: 12px; }
+body.touch #hunthud .team .m .n { max-width: 70px; }
+body.touch #hunthud .team .m .b { width: 34px; }
+
+/* ---------- Co-op: lobby ---------- */
+#coop .card { max-width: 520px; }
+#coop .code { font: 34px/1 var(--pixel); letter-spacing: 6px; color: var(--gold); text-align: center; margin: 6px 0 2px; }
+#coop .link { font: 13px var(--cond); color: var(--muted); text-align: center; word-break: break-all; margin-bottom: 10px; user-select: all; }
+#coop .share { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
+#coop .share .btn { flex: 1 1 140px; }
+#coop .btn.wa { background: #1f8f4e; border-color: #2fbf6a; color: #fff; }
+#coop .players { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; }
+#coop .players .p { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); font: 600 17px var(--cond); }
+#coop .players .p i { width: 11px; height: 11px; border: 1px solid #000; }
+#coop .players .p small { margin-left: auto; color: var(--muted); font-weight: 500; }
+#coop .players .p.empty { opacity: 0.4; font-weight: 500; }
+#coop input.name { width: 100%; padding: 10px 12px; font: 600 20px var(--cond); background: rgba(0, 0, 0, 0.4); color: #fff; border: 1px solid var(--line); margin: 6px 0 12px; box-sizing: border-box; }
+#coop .err { color: var(--danger); font: 600 15px var(--cond); min-height: 20px; margin: 4px 0; text-align: center; }
+#coop .wait { color: var(--muted); font: 600 16px var(--cond); text-align: center; margin: 8px 0; }
+#coop .btns { display: flex; gap: 8px; }
+#coop .btns .btn { flex: 1; }
+#menu .btn.coop { margin-top: 6px; }
+@media (max-height: 560px) {
+  #coop .card { width: min(640px, 94vw); }
+  #coop .card .sub { display: none; }
+  #coop .code { font-size: 24px; margin: 2px 0; }
+  #coop .link { margin-bottom: 6px; font-size: 12px; }
+  #coop .share { margin-bottom: 6px; }
+  #coop .share .btn { padding-top: 7px; padding-bottom: 7px; }
+  #coop .players { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 4px 0 6px; }
+  #coop .players .p { padding: 4px 8px; font-size: 15px; }
+  #coop input.name { margin: 4px 0 6px; padding: 7px 10px; font-size: 17px; }
+  #coop .wait { margin: 4px 0; font-size: 14px; }
+  #coop .btns { position: sticky; bottom: -12px; z-index: 2; background: rgba(16, 20, 26, 0.98); padding: 6px 0; }
+}

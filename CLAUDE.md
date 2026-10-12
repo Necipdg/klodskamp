@@ -6,7 +6,7 @@ kæmper i murbyen "Bastionen", med krog, gas og skydevåben). Hobby/læring unde
 Eget navn, egen bane ("Sandgården"), al grafik og lyd lavet i kode – ingen assets fra Minecraft eller CS.
 Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netlify.app) – ikke kopieret.
 
-## Status (11.10.2026)
+## Status (12.10.2026)
 
 - v0.1 afleveret: fuld lokal kamp mod bots (første hold til 5 runder), køb, økonomi, bygning,
   ødelæggelse, bombe (plant/eksplosion/desarmering), tilskuer, start-/købs-/pause-/slutskærm, lyd.
@@ -66,7 +66,22 @@ Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netl
   gamle caches slettes). `npm run build:app`. Knappen "Installér som app" i menuen (`beforeinstallprompt`; iPhone:
   vejledning). Én-fils-versionen (`build:single`) har ingen app-links/service worker (`appCapable` i main.ts).
   Hosting: GitHub Pages fra repoet Necipdg/klodskamp via GitHub Actions. Testet: `scripts/app-test.mjs` (13 tjek, bl.a. offline).
-- Næste skridt: Necip prøver på sin telefon og prøvespiller. Mulige næste idéer: online multiplayer, flere våben.
+- v1.1 (12.10.2026): **Spil sammen** – Kæmpejagt for 2–4 spillere på samme hold over nettet. Værten opretter et
+  rum (kode på 5 tegn, link `?rum=KODE` delt via WhatsApp/Del/Kopiér). Direkte forbindelse mellem browserne med
+  WebRTC via PeerJS (`src/net/coop.ts`, gratis signalserver 0.peerjs.com + Google STUN, ingen TURN). Værten er
+  autoritativ (`hunt.role = 'host'`): kører bølger, kæmper, sten og porten og sender øjebliksbilleder 15/s
+  (`src/net/sync.ts`, `HostSync`); gæsten (`role = 'client'`, `stepClient`) simulerer kun sin egen spiller, tegner
+  kæmper/sten ~0,1 s bagud med glidning (`ClientSync`, `Giant.toNet/fromNet/applyNet`) og sender træf (`netHit`),
+  skud og ødelagte blokke til værten. Kæmper går efter nærmeste spiller (`pickFocus`), skade på en gæst sendes som
+  `hurtRemote` → `hurt`. Fælles mønter/opgraderinger; nede i 10 s (`HUNT.respawnTime`); tabt når alle er nede.
+  Kæmper +30 % liv pr. ekstra spiller. Ingen pause i co-op. Medspillere tegnes som `Character` med navn og wire
+  (`GameView.setMates`), holdliste og pile på radaren (`huntUi`). Lobby/inviteret-skærme i `src/ui/coopUi.ts`.
+  Gæst der er tavs i 30 s tages ud. Ikke i én-fils-versionen. Testet: 105 logik-tests (+9 `tests/coop.test.ts`,
+  +6 `tests/sync.test.ts` med falsk forbindelse) + `scripts/coop-test.mjs` (27 tjek: 3 browsere med rigtig WebRTC via
+  lokal signalserver `npx peerjs --port 9000 --host 127.0.0.1`, `?peer=127.0.0.1:9000`). IKKE testet på rigtige
+  telefoner/mobilnet – nogle mobilnet kan blokere direkte forbindelser (kræver TURN).
+- Næste skridt: Necip prøver at spille sammen med familien. Mulige næste idéer: TURN-server hvis forbindelsen
+  fejler på mobilnet, flere våben, co-op i taktisk kamp.
 
 ## Stack og kommandoer
 
@@ -76,6 +91,7 @@ TypeScript + Vite 6 + Three.js 0.180 (samme opsætning som `Red bilen/`). Skrift
 - `npm run dev`: udvikling · `npm run check`: typetjek · `npm test`: logik-tests (Node, ingen grafik)
 - `npm run build:single` → kopiér `dist-single/index.html` til `spil.html` (dobbeltklik-versionen)
 - `npm run build:app` → `dist/` med manifest, ikoner og service worker (app-versionen, GitHub Pages)
+- `node scripts/coop-test.mjs [url] [udmappe]`: browsertest af Spil sammen (3 browsere; kræver `npx vite preview --port 4173` og `npx peerjs --port 9000 --host 127.0.0.1`)
 - `node scripts/app-test.mjs`: browsertest af app-versionen (kræver `npm run build:app` + `npx vite preview --port 4173`)
 - `node scripts/ui-test.mjs`: browsertest (kræver `npx vite preview --port 4173`)
 - `node scripts/poses.mjs` / `scripts/live.mjs`: skærmbilleder af udvalgte steder / en kamp med autopilot
@@ -104,7 +120,8 @@ TypeScript + Vite 6 + Three.js 0.180 (samme opsætning som `Red bilen/`). Skrift
   wire, støv), `giantView.ts` (kæmperne – hver kropsdel tegnes med PRÆCIS hitboksens transform). `backdrop.ts` har også
   `buildMountainBackdrop` (fjerne tinder af 4 m-blokke).
 - `src/game/`: `audio.ts` (Web Audio, rumlig lyd + dæmpning bag mure), `input.ts`, `touch.ts` (touch-styring), `settings.ts`.
-- `src/ui/`: HTML/CSS-brugerflade (`ui.ts`, `huntUi.ts`, `style.css`). `src/main.ts`: spiltype (`mode`),
+- `src/net/`: co-op over nettet – `coop.ts` (PeerJS-rum, lobby, beskeder), `sync.ts` (øjebliksbilleder, glidning, træf).
+- `src/ui/`: HTML/CSS-brugerflade (`ui.ts`, `huntUi.ts`, `coopUi.ts`, `style.css`). `src/main.ts`: spiltype (`mode`),
   tilstande og ÉT rAF-loop. `teardown()` rydder ALT fra den kørende spiltype (kæmper, lyde, tidsur, HUD).
 
 ## Faste rammer

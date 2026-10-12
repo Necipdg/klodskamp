@@ -5,7 +5,7 @@ import { HUNT } from '../config/hunt';
 import { angleDiff, clamp, type V3 } from '../core/math';
 import { lineOfSight } from '../core/ray';
 import { tfApply, tfChain, tfRotX, tfRotY, tfRotZ, tfTranslate, type Obb, type Tf } from './tf';
-import type { Hunt } from './hunt';
+import type { Hunt, HuntTarget } from './hunt';
 
 export type PartKind = 'legL' | 'legR' | 'torso' | 'head' | 'nape' | 'armL' | 'armR';
 export const PART_KINDS: PartKind[] = ['legL', 'legR', 'torso', 'head', 'nape', 'armL', 'armR'];
@@ -65,8 +65,12 @@ export class Giant {
   private throwCd = 2.5;
   private recentDmg = 0;
   private legDmg = 0;
-  private swipeHit = false;
+  /** Spillere slaget allerede har ramt (hver spiller kun én gang pr. slag) */
+  private swipeHits = new Set<number>();
   private thrown = false;
+  /** Spilleren kæmpen går efter (co-op: den nærmeste – eller den der sidst skød på den) */
+  focusPid = 0;
+  private aggroPid = -1;
   private lastStepSide = 0;
   hitFlash = 0;
   weakFlash = 0;
@@ -213,8 +217,9 @@ export class Giant {
   // ================= Skade =================
 
   /** Returnerer den faktiske skade */
-  takeDamage(h: Hunt, amount: number, kind: PartKind): number {
+  takeDamage(h: Hunt, amount: number, kind: PartKind, pid = h.localPid): number {
     if (!this.alive) return 0;
+    this.aggroPid = pid;
     this.hp -= amount;
     this.hitFlash = 0.12;
     if (kind === 'nape') this.weakFlash = 0.25;
@@ -238,7 +243,7 @@ export class Giant {
   }
 
   private setState(s: GiantState) {
-    this.state = s; this.stateT = 0; this.swipeHit = false; this.thrown = false;
+    this.state = s; this.stateT = 0; this.swipeHits.clear(); this.thrown = false;
     if (s !== 'swipe' && s !== 'windSwipe') this.swipeAtGate = false;
     if (s !== 'throw' && s !== 'windThrow') this.throwAtGate = false;
   }
@@ -249,15 +254,38 @@ export class Giant {
     let t: 'player' | 'gate' = 'player';
     // Løberen jager altid spilleren
     if (gate && !gate.broken && h.city.gate && this.variant !== 'runner') {
-      const pl = h.player.body.pos;
-      const pd = Math.hypot(pl.x - this.pos.x, pl.z - this.pos.z);
-      if (h.playerAlive && pd < HUNT.aggroRange * this.scale && Math.abs(pl.y - this.pos.y) < this.height * 1.6) {
-        const c = { x: pl.x, y: pl.y + 0.9, z: pl.z };
-        if (lineOfSight(h.world, this.headPos(), c) || lineOfSight(h.world, this.chestPos(), c)) this.aggroT = Math.max(this.aggroT, 2.5);
+      const ts = h.targets();
+      for (const tg of ts) {
+        const pl = tg.body.pos;
+        const pd = Math.hypot(pl.x - this.pos.x, pl.z - this.pos.z);
+        if (pd < HUNT.aggroRange * this.scale && Math.abs(pl.y - this.pos.y) < this.height * 1.6) {
+          const c = { x: pl.x, y: pl.y + 0.9, z: pl.z };
+          if (lineOfSight(h.world, this.headPos(), c) || lineOfSight(h.world, this.chestPos(), c)) {
+            if (this.aggroT <= 0 || this.aggroPid < 0) this.aggroPid = tg.pid;
+            this.aggroT = Math.max(this.aggroT, 2.5);
+          }
+        }
       }
-      t = this.aggroT > 0 && h.playerAlive ? 'player' : 'gate';
+      t = this.aggroT > 0 && ts.length ? 'player' : 'gate';
     }
     if (t !== this.target) { this.target = t; this.repathT = 0; this.path = null; }
+  }
+
+  /** Vælg hvilken spiller kæmpen går efter: den der sidst skød på den, ellers den nærmeste (med lidt træghed) */
+  private pickFocus(h: Hunt): HuntTarget | null {
+    const ts = h.targets();
+    if (!ts.length) return null;
+    if (this.aggroT > 0 && this.aggroPid >= 0) {
+      const a = ts.find((t) => t.pid === this.aggroPid);
+      if (a) { this.focusPid = a.pid; return a; }
+    }
+    const d = (t: HuntTarget) => Math.hypot(t.body.pos.x - this.pos.x, t.body.pos.z - this.pos.z);
+    let best = ts[0];
+    for (const t of ts) if (d(t) < d(best)) best = t;
+    const cur = ts.find((t) => t.pid === this.focusPid);
+    if (cur && d(cur) < d(best) * 1.25 + 2) return cur;
+    this.focusPid = best.pid;
+    return best;
   }
 
   // ================= Opførsel =================
@@ -271,11 +299,12 @@ export class Giant {
     this.throwCd -= dt;
     this.leapCd -= dt;
     this.aggroT -= dt;
-    const pl = h.player.body.pos;
+    const tg = this.pickFocus(h);
+    const pl = tg ? tg.body.pos : h.city.gate ? h.city.gate.center : this.pos;
     const goal = this.target === 'gate' && h.city.gate ? h.city.gate.center : pl;
     const dx = goal.x - this.pos.x, dz = goal.z - this.pos.z;
     const dh = Math.hypot(dx, dz);
-    const wantYaw = Math.atan2(-dx, -dz);
+    const wantYaw = dh > 0.01 ? Math.atan2(-dx, -dz) : this.yaw; // uden mål: stå stille
     this.moveK += ((this.state === 'walk' && this.path ? 1 : 0) - this.moveK) * Math.min(1, dt * 3);
 
     switch (this.state) {
@@ -288,8 +317,8 @@ export class Giant {
         if (this.thinkT <= 0) {
           this.thinkT = 0.25;
           this.chooseTarget(h);
-          if (this.target === 'gate') this.decideGate(h, dh);
-          else if (h.player.alive && h.playerAlive) this.decide(h, dh);
+          if (this.target === 'gate') this.decideGate(h, dh, tg);
+          else if (tg) this.decide(h, tg, dh);
         }
         if (this.state !== 'walk') break;
         this.walk(h, dt, dh, wantYaw, this.target === 'gate' && h.city.gate ? h.city.gate.attack : pl);
@@ -383,7 +412,7 @@ export class Giant {
   }
 
   /** Ved porten: slå på den. Undervejs: kast sten efter spilleren, hvis den flyver tæt på. */
-  private decideGate(h: Hunt, dGate: number) {
+  private decideGate(h: Hunt, dGate: number, tg: HuntTarget | null) {
     // Kasteren bombarderer porten på afstand
     if (this.variant === 'thrower' && h.city.gate) {
       const aim = this.gateAim(h);
@@ -401,9 +430,10 @@ export class Giant {
       h.emit({ type: 'giantWindup', id: this.id, kind: 'swipe', pos: this.headPos() });
       return;
     }
-    const pl = h.player.body.pos;
+    if (!tg) return;
+    const pl = tg.body.pos;
     const pd = Math.hypot(pl.x - this.pos.x, pl.z - this.pos.z);
-    if (h.playerAlive && pd < HUNT.throwRange * 0.75) this.decide(h, pd, true);
+    if (pd < HUNT.throwRange * 0.75) this.decide(h, tg, pd, true);
   }
 
   /** Punktet på Borgporten, kasteren sigter efter (lidt foran porten, så strålen ikke starter inde i en blok) */
@@ -412,8 +442,8 @@ export class Giant {
     return { x: g.center.x + (g.attack.x - g.center.x) * 0.25, y: g.center.y, z: g.center.z + (g.attack.z - g.center.z) * 0.25 };
   }
 
-  private decide(h: Hunt, dh: number, throwOnly = false) {
-    const pl = h.player;
+  private decide(h: Hunt, tg: HuntTarget, dh: number, throwOnly = false) {
+    const pl = tg;
     const py = pl.body.pos.y - this.pos.y;
     const reach = HUNT.swipeReach * this.scale;
     const chest = this.chestPos();
@@ -421,7 +451,7 @@ export class Giant {
     const los = lineOfSight(h.world, chest, target) || lineOfSight(h.world, this.headPos(), target);
     if (this.variant === 'thrower' && !throwOnly) this.holdGround = los && dh < HUNT.throwerKeep;
     // Løberen springer mod spilleren hen over åben grund
-    if (this.variant === 'runner' && !throwOnly && this.leapCd <= 0 && dh > HUNT.leapMin && dh < HUNT.leapMax && py < 6 && los && this.planLeap(h)) {
+    if (this.variant === 'runner' && !throwOnly && this.leapCd <= 0 && dh > HUNT.leapMin && dh < HUNT.leapMax && py < 6 && los && this.planLeap(h, tg)) {
       this.setState('windLeap');
       h.emit({ type: 'giantWindup', id: this.id, kind: 'leap', pos: this.headPos() });
       return;
@@ -493,8 +523,8 @@ export class Giant {
   // ================= Løberens spring =================
 
   /** Find et landingssted lige foran spilleren. Springet skal gå hen over åben grund – aldrig gennem huse. */
-  private planLeap(h: Hunt): boolean {
-    const pl = h.player.body.pos;
+  private planLeap(h: Hunt, tg: HuntTarget): boolean {
+    const pl = tg.body.pos;
     const dx = pl.x - this.pos.x, dz = pl.z - this.pos.z, d = Math.hypot(dx, dz) || 1;
     const short = 2.6 * this.scale; // lander lige foran spilleren (trykbølgen rammer, kroppen lander ikke oven i)
     const r = Math.ceil(this.radius) - 1;
@@ -516,7 +546,8 @@ export class Giant {
   private startLeap(h: Hunt) {
     // Sigt igen efter spilleren (hvis det stadig kan lade sig gøre) – ellers springes til det oprindelige sted
     const old = this.leapTo;
-    if (!h.playerAlive || !this.planLeap(h)) this.leapTo = old;
+    const tg = h.target(this.focusPid);
+    if (!tg || !this.planLeap(h, tg)) this.leapTo = old;
     this.leapFrom = { ...this.pos };
     const d = Math.hypot(this.leapTo.x - this.pos.x, this.leapTo.z - this.pos.z);
     this.leapDur = clamp(d / HUNT.leapSpeed, 0.55, 1.4);
@@ -534,57 +565,110 @@ export class Giant {
     h.emit({ type: 'giantStep', id: this.id, pos: { ...this.pos }, scale: this.scale * 1.4, wet: this.wet(h) });
     this.setState('land');
     // Trykbølge: kun spillere tæt på jorden, med frit udsyn fra landingsstedet og kroppen
-    if (!h.playerAlive) return;
-    const pl = h.player.body;
-    const c = { x: pl.pos.x, y: pl.pos.y + 0.9, z: pl.pos.z };
-    const r = HUNT.leapRadius * this.scale;
-    const dh = Math.hypot(c.x - this.pos.x, c.z - this.pos.z);
-    if (dh > r || pl.pos.y - this.pos.y > 3.5) return;
-    if (!lineOfSight(h.world, { x: this.pos.x, y: this.pos.y + 1.5, z: this.pos.z }, c) || !lineOfSight(h.world, this.bodyAxis(), c)) return;
-    const f = 1 - (dh / r) * 0.5;
-    const al = dh || 1;
-    h.hurtPlayer(Math.round(HUNT.leapDamage * f), { x: ((c.x - this.pos.x) / al) * 14, y: 7, z: ((c.z - this.pos.z) / al) * 14 }, 'spring', this.id);
+    for (const tg of h.targets()) {
+      const pl = tg.body;
+      const c = { x: pl.pos.x, y: pl.pos.y + 0.9, z: pl.pos.z };
+      const r = HUNT.leapRadius * this.scale;
+      const dh = Math.hypot(c.x - this.pos.x, c.z - this.pos.z);
+      if (dh > r || pl.pos.y - this.pos.y > 3.5) continue;
+      if (!lineOfSight(h.world, { x: this.pos.x, y: this.pos.y + 1.5, z: this.pos.z }, c) || !lineOfSight(h.world, this.bodyAxis(), c)) continue;
+      const f = 1 - (dh / r) * 0.5;
+      const al = dh || 1;
+      h.hurtPlayer(Math.round(HUNT.leapDamage * f), { x: ((c.x - this.pos.x) / al) * 14, y: 7, z: ((c.z - this.pos.z) / al) * 14 }, 'spring', this.id, false, tg.pid);
+    }
   }
 
   /** Slaget rammer jorden: trykbølge rundt om hånden (rammer kun spillere tæt på jorden og med frit udsyn) */
   private smashShockwave(h: Hunt, hand: V3) {
-    if (this.swipeHit || !h.playerAlive) return;
-    const pl = h.player.body;
-    const c = { x: pl.pos.x, y: pl.pos.y + 0.9, z: pl.pos.z };
-    const r = 4.5 * this.scale;
-    const dh = Math.hypot(c.x - hand.x, c.z - hand.z);
-    if (dh > r || pl.pos.y - this.pos.y > 3) return;
-    const src = { x: hand.x, y: hand.y + 1, z: hand.z };
-    if (!lineOfSight(h.world, src, c) || !lineOfSight(h.world, this.bodyAxis(), c)) return;
-    this.swipeHit = true;
-    const f = 1 - (dh / r) * 0.5;
-    const ax = c.x - hand.x, az = c.z - hand.z, al = Math.hypot(ax, az) || 1;
-    h.hurtPlayer(Math.round(HUNT.swipeDamage * f), { x: (ax / al) * 12, y: 6, z: (az / al) * 12 }, 'slag', this.id);
+    for (const tg of h.targets()) {
+      if (this.swipeHits.has(tg.pid)) continue;
+      const pl = tg.body;
+      const c = { x: pl.pos.x, y: pl.pos.y + 0.9, z: pl.pos.z };
+      const r = 4.5 * this.scale;
+      const dh = Math.hypot(c.x - hand.x, c.z - hand.z);
+      if (dh > r || pl.pos.y - this.pos.y > 3) continue;
+      const src = { x: hand.x, y: hand.y + 1, z: hand.z };
+      if (!lineOfSight(h.world, src, c) || !lineOfSight(h.world, this.bodyAxis(), c)) continue;
+      this.swipeHits.add(tg.pid);
+      const f = 1 - (dh / r) * 0.5;
+      const ax = c.x - hand.x, az = c.z - hand.z, al = Math.hypot(ax, az) || 1;
+      h.hurtPlayer(Math.round(HUNT.swipeDamage * f), { x: (ax / al) * 12, y: 6, z: (az / al) * 12 }, 'slag', this.id, false, tg.pid);
+    }
   }
 
   private checkSwipeHit(h: Hunt) {
-    if (this.swipeHit || !h.playerAlive) return;
-    const pl = h.player.body;
-    const c = { x: pl.pos.x, y: pl.pos.y + 0.9, z: pl.pos.z };
-    const arm = this.part('armR').box;
-    // Afstand fra spilleren til den svingende arm (hånden er størst – lidt ekstra radius)
-    const near = Math.hypot(c.x - arm.tf.t.x, c.y - arm.tf.t.y, c.z - arm.tf.t.z) < arm.h.y + 2.5 * this.scale;
-    if (!near) return;
-    const hand = this.handPos('R');
-    const toPlayer = (q: V3) => Math.hypot(q.x - c.x, q.y - c.y, q.z - c.z);
-    // Kapsel langs armen
-    const top = tfApply(arm.tf, { x: 0, y: arm.h.y, z: 0 });
-    const dist = segDist(top, hand, c);
-    if (dist > arm.h.x + 1.0 && toPlayer(hand) > 2.4 * this.scale) return;
-    // Aldrig gennem bygninger: der skal være frit fra kæmpens krop (der hvor den står på gaden) til spilleren,
-    // og fra skulderen eller brystet – så et slag aldrig rækker ind over/igennem et hus
-    if (!lineOfSight(h.world, this.bodyAxis(), c)) return;
-    if (!lineOfSight(h.world, top, c) && !lineOfSight(h.world, this.chestPos(), c)) return;
-    this.swipeHit = true;
-    const away = { x: c.x - this.pos.x, z: c.z - this.pos.z };
-    const al = Math.hypot(away.x, away.z) || 1;
-    h.hurtPlayer(HUNT.swipeDamage, { x: (away.x / al) * 16, y: 7, z: (away.z / al) * 16 }, 'slag', this.id);
+    for (const tg of h.targets()) {
+      if (this.swipeHits.has(tg.pid)) continue;
+      const pl = tg.body;
+      const c = { x: pl.pos.x, y: pl.pos.y + 0.9, z: pl.pos.z };
+      const arm = this.part('armR').box;
+      // Afstand fra spilleren til den svingende arm (hånden er størst – lidt ekstra radius)
+      const near = Math.hypot(c.x - arm.tf.t.x, c.y - arm.tf.t.y, c.z - arm.tf.t.z) < arm.h.y + 2.5 * this.scale;
+      if (!near) continue;
+      const hand = this.handPos('R');
+      const toPlayer = (q: V3) => Math.hypot(q.x - c.x, q.y - c.y, q.z - c.z);
+      // Kapsel langs armen
+      const top = tfApply(arm.tf, { x: 0, y: arm.h.y, z: 0 });
+      const dist = segDist(top, hand, c);
+      if (dist > arm.h.x + 1.0 && toPlayer(hand) > 2.4 * this.scale) continue;
+      // Aldrig gennem bygninger: der skal være frit fra kæmpens krop (der hvor den står på gaden) til spilleren,
+      // og fra skulderen eller brystet – så et slag aldrig rækker ind over/igennem et hus
+      if (!lineOfSight(h.world, this.bodyAxis(), c)) continue;
+      if (!lineOfSight(h.world, top, c) && !lineOfSight(h.world, this.chestPos(), c)) continue;
+      this.swipeHits.add(tg.pid);
+      const away = { x: c.x - this.pos.x, z: c.z - this.pos.z };
+      const al = Math.hypot(away.x, away.z) || 1;
+      h.hurtPlayer(HUNT.swipeDamage, { x: (away.x / al) * 16, y: 7, z: (away.z / al) * 16 }, 'slag', this.id, false, tg.pid);
+    }
   }
+
+  // ================= Netværk (co-op) =================
+
+  /** Alt hvad en klient behøver for at tegne kæmpen og ramme dens hitbokse */
+  toNet(): GiantNet {
+    const r = (v: number) => Math.round(v * 1000) / 1000;
+    return {
+      id: this.id, v: this.variant, sc: this.scale, big: this.big, hp: Math.round(this.hp), mx: this.maxHp,
+      p: [r(this.pos.x), r(this.pos.y), r(this.pos.z)], yaw: r(this.yaw), st: this.state, t: r(this.stateT),
+      wp: r(this.walkPh), mk: r(this.moveK), f: r(this.fall), sk: r(this.sink), hf: r(this.hitFlash), wf: r(this.weakFlash),
+      rk: this.rockInHand, lt: [r(this.leapTo.x), r(this.leapTo.y), r(this.leapTo.z)], lf: [r(this.leapFrom.x), r(this.leapFrom.y), r(this.leapFrom.z)], ld: r(this.leapDur),
+    };
+  }
+
+  static fromNet(s: GiantNet): Giant {
+    const g = new Giant({ x: s.p[0], y: s.p[1], z: s.p[2] }, s.yaw, s.sc, s.mx, s.big, s.v as GiantVariant);
+    (g as { id: number }).id = s.id;
+    g.applyNet(s);
+    return g;
+  }
+
+  /** Sæt kæmpens tilstand fra værtens øjebliksbillede (a → b med andel k: blød bevægelse mellem billederne) */
+  applyNet(b: GiantNet, a: GiantNet | null = null, k = 1) {
+    const L = (x: number, y: number) => (a ? x + (y - x) * k : y);
+    const src = a && a.st === b.st ? a : null; // tiden i en tilstand kan kun glide, hvis tilstanden er den samme
+    const P = (i: number) => (a ? a.p[i] + (b.p[i] - a.p[i]) * k : b.p[i]);
+    this.pos = { x: P(0), y: P(1), z: P(2) };
+    this.yaw = a ? a.yaw + angleDiff(a.yaw, b.yaw) * k : b.yaw;
+    this.state = b.st;
+    this.stateT = src ? src.t + (b.t - src.t) * k : b.t;
+    this.walkPh = a ? a.wp + (b.wp - a.wp) * k : b.wp;
+    this.moveK = L(a ? a.mk : 0, b.mk);
+    this.fall = L(a ? a.f : 0, b.f);
+    this.sink = L(a ? a.sk : 0, b.sk);
+    this.hp = b.hp;
+    this.hitFlash = b.hf; this.weakFlash = b.wf; this.rockInHand = b.rk;
+    this.leapTo = { x: b.lt[0], y: b.lt[1], z: b.lt[2] };
+    this.leapFrom = { x: b.lf[0], y: b.lf[1], z: b.lf[2] };
+    this.leapDur = b.ld;
+    this.computeParts();
+  }
+}
+
+/** Kæmpe i værtens øjebliksbillede (korte navne – sendes 15 gange i sekundet) */
+export interface GiantNet {
+  id: number; v: string; sc: number; big: boolean; hp: number; mx: number;
+  p: [number, number, number]; yaw: number; st: GiantState; t: number; wp: number; mk: number; f: number; sk: number;
+  hf: number; wf: number; rk: boolean; lt: [number, number, number]; lf: [number, number, number]; ld: number;
 }
 
 function segDist(a: V3, b: V3, p: V3): number {

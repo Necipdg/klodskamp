@@ -23,6 +23,20 @@ import {
 
 export type HuntPhase = 'break' | 'fight' | 'won' | 'lost';
 
+/** En spiller kæmperne kan gå efter (co-op: alle spillere i live) */
+export interface HuntTarget { pid: number; body: { pos: V3; vel: V3; onGround: boolean }; alive: boolean }
+/** En medspiller i co-op. Positionen kommer over netværket; kæmperne bruger den til at sigte og ramme. */
+export interface RemotePlayer extends HuntTarget {
+  name: string;
+  yaw: number; pitch: number;
+  hp: number;
+  slot: Slot;
+  /** Krogens spids, når den er ude (til tegning af wiren) */
+  hookTip: V3 | null;
+}
+/** solo = alene; host = vært i co-op (kører kæmperne); client = gæst (kæmperne kommer fra værten) */
+export type HuntRole = 'solo' | 'host' | 'client';
+
 export interface HuntInput {
   fwd: number; right: number;
   jump: boolean; jumpPressed: boolean;
@@ -95,7 +109,12 @@ export type HuntEvent =
   | { type: 'rockThrow'; id: number; pos: V3 }
   | { type: 'rockImpact'; id: number; pos: V3; hitPlayer: boolean; big: boolean }
   | { type: 'coins'; amount: number; pos: V3 | null; why: 'kill' | 'weak' | 'wave' }
-  | { type: 'upgrade'; id: UpgradeId | 'repair'; level: number };
+  | { type: 'upgrade'; id: UpgradeId | 'repair'; level: number }
+  // Co-op
+  | { type: 'hurtRemote'; pid: number; dmg: number; knock: V3 | null; cause: string; giantId: number }
+  | { type: 'netHit'; id: number; part: PartKind; dmg: number; weak: boolean }
+  | { type: 'down'; pid: number }
+  | { type: 'respawn'; pid: number };
 
 interface SpawnPlan { delay: number; scale: number; hp: number; big: boolean; variant?: GiantVariant; gate?: number }
 const RUNNER = (delay: number): SpawnPlan => ({ delay, scale: 0.95, hp: HUNT.runnerHp, big: false, variant: 'runner' });
@@ -129,6 +148,8 @@ export class Hunt {
   readonly nav: GiantNav;
   readonly rng: Rng;
   readonly player: Player;
+  /** Kæmpernes liv ganges med dette (flere spillere i co-op) */
+  hpScale = 1;
   input: HuntInput = emptyHuntInput();
   hook: HookState = { state: 'idle', tip: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 }, len: 0, giantId: -1, part: null, millId: -1, millPart: 0, local: { x: 0, y: 0, z: 0 } };
   gas: number = HUNT.maxGas;
@@ -165,6 +186,23 @@ export class Hunt {
   private wasWet = false;
   private splashT = 0;
 
+  // ---- Co-op ----
+  role: HuntRole = 'solo';
+  /** Denne spillers nummer (værten er 0) */
+  localPid = 0;
+  remotes: RemotePlayer[] = [];
+  /** Sekunder til man er tilbage efter at være faldet (co-op) */
+  respawnT = 0;
+  get coop() { return this.role !== 'solo'; }
+  /** Alle spillere kæmperne kan gå efter lige nu */
+  targets(): HuntTarget[] {
+    const out: HuntTarget[] = [];
+    if (this.playerAlive) out.push({ pid: this.localPid, body: this.player.body, alive: true });
+    for (const r of this.remotes) if (r.alive) out.push(r);
+    return out;
+  }
+  target(pid: number): HuntTarget | null { return this.targets().find((t) => t.pid === pid) ?? null; }
+
   constructor(seed = 1, readonly mapId: HuntMapId = 'bastionen', readonly difficulty: HuntDifficulty = 'normal') {
     this.rng = new Rng(seed);
     this.diff = HUNT_DIFF[difficulty];
@@ -181,7 +219,11 @@ export class Hunt {
   get playerAlive() { return this.player.alive && this.phase !== 'lost'; }
   emit(e: HuntEvent) { this.events.push(e); }
   drainEvents() { const e = this.events; this.events = []; return e; }
-  giantsLeft() { return this.giants.filter((g) => g.alive).length + this.spawnQueue.length; }
+  giantsLeft() { return this.giants.filter((g) => g.alive).length + (this.role === 'client' ? this.netQueued : this.spawnQueue.length); }
+  /** Kæmper der venter på at komme ind i denne bølge (sendes til gæsterne) */
+  get queued() { return this.spawnQueue.length; }
+  /** Gæst: antal kæmper i værtens kø */
+  netQueued = 0;
   get speed() { const v = this.player.body.vel; return Math.hypot(v.x, v.y, v.z); }
 
   // ================= Opgraderinger =================
@@ -214,6 +256,13 @@ export class Hunt {
     if (this.coins < cost) return { ok: false, msg: 'Ikke nok mønter' };
     this.coins -= cost;
     this.up[id] = l + 1;
+    this.applyUpgradeLocal(id);
+    this.emit({ type: 'upgrade', id, level: l + 1 });
+    return { ok: true, msg: `${def.name} – niveau ${l + 1}` };
+  }
+
+  /** Det en ny opgradering giver med det samme (fuld gastank, fyldte magasiner) – også hos medspillere */
+  applyUpgradeLocal(id: UpgradeId | 'repair') {
     const p = this.player;
     if (id === 'gas') this.gas = this.maxGas;
     if (id === 'mag') {
@@ -223,8 +272,6 @@ export class Hunt {
         ws.mag = this.magSize(wid);
       }
     }
-    this.emit({ type: 'upgrade', id, level: l + 1 });
-    return { ok: true, msg: `${def.name} – niveau ${l + 1}` };
   }
 
   /** Start næste bølge med det samme (knappen i opgraderingsmenuen) */
@@ -247,6 +294,7 @@ export class Hunt {
 
   step(dt = HUNT.dt) {
     this.time += dt;
+    if (this.role === 'client') { this.stepClient(dt); return; }
     if (this.phase === 'won' || this.phase === 'lost') {
       // Verden kører videre (kæmper falder færdigt), men spilleren styrer ikke mere
       for (const m of this.mills) m.update(dt);
@@ -264,6 +312,13 @@ export class Hunt {
       this.updateMovement(dt);
       this.updateWeapon(dt);
       this.updateDepots(dt);
+    } else this.updateRespawn(dt);
+    // Co-op: tabt først når alle er faldet på samme tid
+    if (this.role === 'host' && !p.alive && this.remotes.every((r) => !r.alive)) {
+      this.releaseHook();
+      this.lostReason = 'player';
+      this.phase = 'lost';
+      this.emit({ type: 'lost', reason: 'player' });
     }
     for (const m of this.mills) m.update(dt);
     for (const g of this.giants) g.update(this, dt);
@@ -272,6 +327,46 @@ export class Hunt {
     this.invulnT -= dt;
     // Engangs-tryk forbruges
     this.input.jumpPressed = false; this.input.hookPressed = false; this.input.firePressed = false; this.input.reload = false; this.input.slot = null;
+  }
+
+  /** Gæst i co-op: kun ens egen spiller simuleres – kæmper, sten, bølger og porten kommer fra værten */
+  private stepClient(dt: number) {
+    const p = this.player;
+    for (const m of this.mills) m.update(dt);
+    if (this.phase === 'won' || this.phase === 'lost') return;
+    this.stats.time += dt;
+    p.prevPos.x = p.body.pos.x; p.prevPos.y = p.body.pos.y; p.prevPos.z = p.body.pos.z;
+    if (this.phase === 'break' && p.alive) p.hp = Math.min(HUNT.maxHp, p.hp + dt * 4);
+    if (p.alive) {
+      this.updateMovement(dt);
+      this.updateWeapon(dt);
+      this.updateDepots(dt);
+    } else this.updateRespawn(dt);
+    this.invulnT -= dt;
+    this.input.jumpPressed = false; this.input.hookPressed = false; this.input.firePressed = false; this.input.reload = false; this.input.slot = null;
+  }
+
+  /** Co-op: efter at være faldet kommer man tilbage ved startpunktet */
+  private updateRespawn(dt: number) {
+    if (!this.coop || this.phase === 'won' || this.phase === 'lost') return;
+    this.respawnT -= dt;
+    if (this.respawnT > 0) return;
+    const p = this.player, sp = this.city.spawn;
+    p.alive = true; p.hp = HUNT.maxHp;
+    p.body.pos = { ...sp.pos }; p.prevPos = { ...sp.pos }; p.body.vel = { x: 0, y: 0, z: 0 }; p.yaw = sp.yaw; p.pitch = 0;
+    this.gas = this.maxGas;
+    p.primary!.reserve = Math.max(p.primary!.reserve, this.reserveSize('rifle'));
+    p.pistol.reserve = Math.max(p.pistol.reserve, this.reserveSize('pistol'));
+    this.emit({ type: 'respawn', pid: this.localPid });
+  }
+
+  /** Porten fra værtens øjebliksbillede (huller svarer til livet) */
+  setGateHp(hp: number, broken: boolean) {
+    const gt = this.gate;
+    if (!gt) return;
+    gt.hp = hp;
+    if (broken && !gt.broken) { gt.broken = true; for (const [x, y, z] of this.city.gate!.cells) this.world.set(x, y, z, B.AIR); }
+    if (!gt.broken) this.syncGateBlocks();
   }
 
   private updateWaves(dt: number) {
@@ -322,7 +417,7 @@ export class Hunt {
     const goal = this.city.gate ? this.city.gate.attack : pl;
     const yaw = Math.atan2(-(goal.x - gate.x), -(goal.z - gate.z));
     const variant: GiantVariant = s.variant ?? (s.big ? 'stone' : 'clay');
-    const g = new Giant({ ...gate }, yaw, s.scale, Math.round(s.hp * this.diff.giantHp), s.big, variant);
+    const g = new Giant({ ...gate }, yaw, s.scale, Math.round(s.hp * this.diff.giantHp * this.hpScale), s.big, variant);
     this.giants.push(g);
     this.emit({ type: 'giantSpawn', id: g.id, pos: { ...gate }, big: s.big, variant });
     return g;
@@ -682,11 +777,18 @@ export class Hunt {
       const weak = r.part === 'nape';
       const mult = weak ? HUNT.weakMult : r.part === 'head' ? HUNT.headMult : r.part === 'torso' ? 1 : HUNT.limbMult;
       const dmg = Math.round(def.damage * Math.pow(def.rangeMod, r.dist / 25) * mult * (1 + 0.15 * this.up.dmg));
-      if (weak && g.alive) { this.stats.weakHits++; this.addCoins(WEAK_COINS, null, 'weak'); this.addScore(WEAK_SCORE); }
-      const wasAlive = g.alive;
-      g.takeDamage(this, dmg, r.part);
-      const kill = wasAlive && !g.alive;
-      this.emit({ type: 'hitGiant', id: g.id, part: r.part, dmg, weak, pos: r.point, kill });
+      if (this.role === 'client') {
+        // Gæst: værten regner skaden (og mønterne) – her vises kun træffet
+        if (weak && g.alive) this.stats.weakHits++;
+        this.emit({ type: 'netHit', id: g.id, part: r.part, dmg, weak });
+        this.emit({ type: 'hitGiant', id: g.id, part: r.part, dmg, weak, pos: r.point, kill: false });
+      } else {
+        if (weak && g.alive) { this.stats.weakHits++; this.addCoins(WEAK_COINS, null, 'weak'); this.addScore(WEAK_SCORE); }
+        const wasAlive = g.alive;
+        g.takeDamage(this, dmg, r.part);
+        const kill = wasAlive && !g.alive;
+        this.emit({ type: 'hitGiant', id: g.id, part: r.part, dmg, weak, pos: r.point, kill });
+      }
     } else if (r.mill) {
       hit = 'block';
       this.emit({ type: 'blockHit', pos: r.point, normal: { x: -dir.x, y: -dir.y, z: -dir.z }, block: B.PLANKS });
@@ -727,8 +829,10 @@ export class Hunt {
     const from = g.handPos('L');
     const big = g.variant === 'thrower';
     const gateAim = atGate && this.city.gate ? g.gateAim(this) : null;
-    const target = gateAim ?? this.center();
-    const v = gateAim ? { x: 0, y: 0, z: 0 } : this.player.body.vel;
+    const tg = this.target(g.focusPid) ?? this.targets()[0] ?? null;
+    if (!gateAim && !tg) return;
+    const target = gateAim ?? { x: tg!.body.pos.x, y: tg!.body.pos.y + 0.9, z: tg!.body.pos.z };
+    const v = gateAim ? { x: 0, y: 0, z: 0 } : tg!.body.vel;
     const D = dist(from, target);
     const T = clamp(D / HUNT.rockSpeed, 0.45, 2.4);
     // Sigt efter hvor spilleren er på vej hen (lidt mindre end helt, så man kan undvige)
@@ -742,17 +846,18 @@ export class Hunt {
   }
 
   private updateRocks(dt: number) {
-    const c = this.center();
+    const ts = this.targets();
     for (const r of this.rocks) {
       r.age += dt;
       r.vel.y -= HUNT.rockGravity * dt;
       const nx = r.pos.x + r.vel.x * dt, ny = r.pos.y + r.vel.y * dt, nz = r.pos.z + r.vel.z * dt;
       let hitPlayer = false, done = false;
       const rad = r.big ? HUNT.boulderRadius : HUNT.rockRadius;
-      if (this.playerAlive && Math.hypot(nx - c.x, ny - c.y, nz - c.z) < rad + 0.65) {
+      const hitT = ts.find((t) => Math.hypot(nx - t.body.pos.x, ny - (t.body.pos.y + 0.9), nz - t.body.pos.z) < rad + 0.65);
+      if (hitT) {
         hitPlayer = true;
         const vl = Math.hypot(r.vel.x, r.vel.z) || 1;
-        this.hurtPlayer(r.big ? HUNT.boulderDamage : HUNT.rockDamage, { x: (r.vel.x / vl) * 10, y: 5, z: (r.vel.z / vl) * 10 }, 'sten', -1);
+        this.hurtPlayer(r.big ? HUNT.boulderDamage : HUNT.rockDamage, { x: (r.vel.x / vl) * 10, y: 5, z: (r.vel.z / vl) * 10 }, 'sten', -1, false, hitT.pid);
         done = true;
       } else if (this.world.solidAt(Math.floor(nx), Math.floor(ny), Math.floor(nz)) || ny < 0.5 || r.age > 7) done = true;
       if (done && !hitPlayer) {
@@ -772,19 +877,22 @@ export class Hunt {
 
   /** Kasterens klippeblok splintres: skade rundt om nedslaget – kun hvis der er frit fra nedslaget til spilleren */
   private boulderSplash(r: Rock) {
-    if (!this.playerAlive) return;
-    const c = this.center();
-    const d = Math.hypot(c.x - r.pos.x, c.y - r.pos.y, c.z - r.pos.z);
-    if (d > HUNT.boulderSplash) return;
-    if (!lineOfSight(this.world, r.pos, c)) return;
-    const f = 1 - (d / HUNT.boulderSplash) * 0.6;
-    const al = Math.hypot(c.x - r.pos.x, c.z - r.pos.z) || 1;
-    this.hurtPlayer(Math.round(HUNT.boulderDamage * 0.8 * f), { x: ((c.x - r.pos.x) / al) * 8, y: 4, z: ((c.z - r.pos.z) / al) * 8 }, 'sten', -1);
+    for (const t of this.targets()) {
+      const c = { x: t.body.pos.x, y: t.body.pos.y + 0.9, z: t.body.pos.z };
+      const d = Math.hypot(c.x - r.pos.x, c.y - r.pos.y, c.z - r.pos.z);
+      if (d > HUNT.boulderSplash) continue;
+      if (!lineOfSight(this.world, r.pos, c)) continue;
+      const f = 1 - (d / HUNT.boulderSplash) * 0.6;
+      const al = Math.hypot(c.x - r.pos.x, c.z - r.pos.z) || 1;
+      this.hurtPlayer(Math.round(HUNT.boulderDamage * 0.8 * f), { x: ((c.x - r.pos.x) / al) * 8, y: 4, z: ((c.z - r.pos.z) / al) * 8 }, 'sten', -1, false, t.pid);
+    }
   }
 
   // ================= Skade og forsyninger =================
 
-  hurtPlayer(dmg: number, knock: V3 | null, cause: string, giantId: number, ignoreInvuln = false) {
+  hurtPlayer(dmg: number, knock: V3 | null, cause: string, giantId: number, ignoreInvuln = false, pid = this.localPid) {
+    // En medspiller: skaden sendes til vedkommende (som selv regner rustning og sværhed med)
+    if (pid !== this.localPid) { this.emit({ type: 'hurtRemote', pid, dmg, knock, cause, giantId }); return; }
     const p = this.player;
     if (!p.alive || this.phase === 'won') return;
     if (this.invulnT > 0 && !ignoreInvuln) return;
@@ -801,6 +909,12 @@ export class Hunt {
       p.hp = 0;
       p.alive = false;
       this.releaseHook();
+      if (this.coop) {
+        // Co-op: man er nede et øjeblik og kommer så tilbage (tabt først, hvis alle er nede)
+        this.respawnT = HUNT.respawnTime;
+        this.emit({ type: 'down', pid: this.localPid });
+        return;
+      }
       this.lostReason = 'player';
       this.phase = 'lost';
       this.emit({ type: 'lost', reason: 'player' });
@@ -822,6 +936,14 @@ export class Hunt {
         this.emit({ type: 'depot', id: d.id });
       }
     }
+  }
+
+  /** Værten: en gæst har ramt en kæmpe */
+  applyRemoteHit(pid: number, id: number, part: PartKind, dmg: number, weak: boolean) {
+    const g = this.giants.find((x) => x.id === id);
+    if (!g || !g.alive || this.role !== 'host') return;
+    if (weak) { this.addCoins(WEAK_COINS, null, 'weak'); this.addScore(WEAK_SCORE); }
+    g.takeDamage(this, dmg, part, pid);
   }
 
   /** Til tests: hvor langt er en blok væk fra et punkt */

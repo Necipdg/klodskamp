@@ -39,6 +39,8 @@ const ICON_AR = svgPx(['########', '########', '########', '########', '.######.
 export interface UICallbacks {
   start(team: Team, diff: Difficulty): void;
   startHunt(map: HuntMapId, diff: Difficulty): void;
+  /** Kæmpejagt sammen med andre (null = ikke muligt i denne udgave) */
+  coop: ((map: HuntMapId, diff: Difficulty) => void) | null;
   /** Ydelsestest fra pausemenuen – returnerer resultatet som tekst */
   benchmark(): string;
   /** "Installér som app" (Android/computer: browserens egen dialog) */
@@ -103,7 +105,7 @@ export class UI {
     col.append(el('div', 'label', 'Vælg spiltype'));
     const modes = el('div', 'modes');
     const mT = el('button', 'mode on', '<span class="t">Taktisk kamp</span><span class="s">3 mod 3 · bombe · køb og byg</span>');
-    const mH = el('button', 'mode hunt', '<span class="t">Kæmpejagt</span><span class="s">Alene · krog, gas, opgraderinger og bølger af kæmper</span>');
+    const mH = el('button', 'mode hunt', '<span class="t">Kæmpejagt</span><span class="s">Alene eller sammen · krog, gas, opgraderinger og bølger af kæmper</span>');
     modes.append(mT, mH);
     col.append(modes);
     // Taktisk kamp
@@ -145,6 +147,11 @@ export class UI {
     const go = el('button', 'btn hunt', `Start jagten <span class="key">JAGT</span>`);
     go.onclick = () => this.cb.startHunt(this.huntMap, this.settings.huntDiff);
     paneH.append(go);
+    if (this.cb.coop) {
+      const co = el('button', 'btn coop', `Spil sammen <span class="key">DEL LINK</span>`);
+      co.onclick = () => this.cb.coop?.(this.huntMap, this.settings.huntDiff);
+      paneH.append(co);
+    }
     col.append(paneT, paneH);
     const ctl = el('button', 'btn small', 'Styring');
     ctl.onclick = () => this.showControls(null);
