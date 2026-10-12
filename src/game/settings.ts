@@ -20,6 +20,8 @@ export interface Settings {
   huntDiff: 'let' | 'normal' | 'svaer';
   /** Skarphed (opløsning): auto justerer efter billedhastigheden */
   sharp: 'auto' | 'lav' | 'mellem' | 'hoj';
+  /** Touch: højre side af skærmen er kig + skyd ('skyd') eller kun kig ('kig') */
+  rightSide: 'skyd' | 'kig';
   /** Navn når man spiller sammen med andre */
   name: string;
 }
@@ -27,7 +29,7 @@ export interface Settings {
 const KEY = 'klodskamp.indstillinger';
 /** Er det en telefon eller tablet (grov pegeenhed, ingen mus)? */
 export const isTouchDevice = () => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches;
-const DEFAULTS: Settings = { sensitivity: 1, volume: 0.7, quality: 2, fov: 78, invertY: false, seenIntro: false, touch: 'auto', buttons: 'normal', vibrate: true, showFps: false, huntDiff: 'normal', sharp: 'auto', name: '' };
+const DEFAULTS: Settings = { sensitivity: 1, volume: 0.7, quality: 2, fov: 78, invertY: false, seenIntro: false, touch: 'auto', buttons: 'normal', vibrate: true, showFps: false, huntDiff: 'normal', sharp: 'auto', rightSide: 'skyd', name: '' };
 
 export function loadSettings(): Settings {
   try {

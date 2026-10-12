@@ -341,6 +341,17 @@ export class UI {
     }
     bq.append(el('span', '', 'Knapstørrelse'), bseg, el('span', ''));
     c.append(bq);
+    const rq = el('div', 'setting');
+    const rseg = el('div', 'seg');
+    for (const [k, n] of [['skyd', 'Kig + skyd'], ['kig', 'Kun kig']] as const) {
+      const b = el('button', k === s.rightSide ? 'on' : '', n);
+      b.dataset.right = k;
+      b.onclick = () => { s.rightSide = k; rseg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); this.cb.settings(s); };
+      rseg.append(b);
+    }
+    rq.append(el('span', '', 'Højre side (touch)'), rseg, el('span', ''));
+    rq.title = 'Kig + skyd: du skyder, så længe tommelfingeren er på højre side af skærmen, og sigter ved at trække. Kun kig: skyd med SKYD-knappen.';
+    c.append(rq);
     const check = (name: string, val: boolean, set: (v: boolean) => void) => {
       const row = el('div', 'setting');
       const x = el('input') as HTMLInputElement;

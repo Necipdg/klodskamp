@@ -20,6 +20,14 @@ Blokspil i browseren med to spiltyper, der vælges på startskærmen:
 - **Udvikling:** `npm install` og derefter `npm run dev`. `npm run build:app` bygger app-versionen i `dist/`.
   Hvert push til `main` på GitHub bygger og udgiver appen automatisk (`.github/workflows/pages.yml`).
 
+## Ny åbning og skyd med hele højre side (ny i v1.2)
+
+- Spillet åbner med en titelskærm: kæmpen rejser sig bag bjergene i solnedgangen, og logoet falder ned klods for
+  klods. Tryk for at spille (på telefonen går spillet samtidig i fuld skærm). På højkant vises samme scene med en
+  drejende telefon.
+- **Telefon: tryk hvor som helst på højre side = skyd, træk = sigt.** Man behøver ikke ramme SKYD-knappen.
+  Vil man kunne kigge uden at skyde: Indstillinger → Højre side (touch) → *Kun kig*.
+
 ## Skarpere billede på telefonen (ny i v1.1.1)
 
 - **Indstillinger → Skarphed**: *Auto* (standard) tegner så skarpt som telefonen kan nå med jævn billedhastighed og går

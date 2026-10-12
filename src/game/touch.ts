@@ -39,6 +39,8 @@ export class TouchControls {
   private held = new Map<number, string>();
   /** Skærmpixel → "musepixel" for kig */
   lookScale = 1.5;
+  /** Hele højre side er både kig og SKYD: man skyder, mens fingeren er på skærmen (indstillingen "Højre side") */
+  fireZone = true;
 
   constructor(private input: Input, private cb: { pause(): void }) {
     this.root.id = 'touch';
@@ -112,7 +114,15 @@ export class TouchControls {
       this.base.style.top = `${e.clientY}px`;
       this.base.classList.add('on');
       this.knob.style.transform = 'translate(-50%, -50%)';
-    } else this.looks.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    } else {
+      this.looks.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.fireZone) {
+        // Skyd med det samme, hvor tommelfingeren end rammer – og sigt ved at trække
+        this.held.set(e.pointerId, 'fire');
+        this.root.querySelector('.tb[data-act="fire"]')?.classList.add('on');
+        this.press('fire', true);
+      }
+    }
   }
 
   private move(e: PointerEvent) {

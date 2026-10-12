@@ -87,6 +87,13 @@ Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netl
   ≥1,5. `GameView.setResolution()`. Lav grafik: tågen starter ved 50 % af 220 m (før 45 % af 190 m).
   FPS-visningen viser skarpheden. Touch: SKYD/KROG har ✥ (kan trækkes = sigt mens man skyder – virkede allerede),
   tydeligere forklaring og et tip ved start. `mobile-test.mjs` tjekker nu "hold SKYD og træk" (32 tjek).
+- v1.2 (12.10.2026): **ny åbning** – titelskærm (`src/ui/intro.ts`, `Splash`): pixel-SVG-scene i kode (solnedgang,
+  stjerner, bjergkæder, borgmur med glødende port, kæmpe med glødende øjne og nakkekrystal der rejser sig), logo af
+  faldende klodser med "bump", filmstriber, "Tryk/Klik for at spille" → kæmpebrøl, fuld skærm på telefoner, striberne
+  glider ud til menuen. Vises ikke ved invitationslink eller i automatiske tests (`navigator.webdriver`; `?intro`
+  tvinger den frem). "Drej telefonen" (højkant) bruger samme scene med drejende telefon. **Touch: hele højre side er
+  kig + skyd** (`TouchControls.fireZone`, indstilling "Højre side (touch)": Kig + skyd / Kun kig). `mobile-test.mjs`
+  35 tjek (CDP-touch slipper fingre efter rækkefølge – slip altid i omvendt rækkefølge eller én ad gangen).
 - Næste skridt: Necip prøver at spille sammen med familien. Mulige næste idéer: TURN-server hvis forbindelsen
   fejler på mobilnet, flere våben, co-op i taktisk kamp.
 

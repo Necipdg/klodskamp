@@ -346,8 +346,7 @@ body.touch #hunthud .boss { top: 66px; width: 240px; }
 /* Telefon på højkant: bed om at dreje den */
 #rotate { display: none; }
 @media (orientation: portrait) {
-  body.touch #rotate { display: flex; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; background: #0d1015; color: var(--gold); font: 16px var(--pixel); text-align: center; padding: 24px; }
-  body.touch #rotate b { display: block; font-size: 64px; margin-bottom: 16px; animation: pulse 1.2s infinite; }
+  body.touch #rotate { display: block; position: fixed; inset: 0; z-index: 50; background: #0b1026; overflow: hidden; }
 }
 
 
@@ -448,4 +447,63 @@ body.touch #hunthud .team .m .b { width: 34px; }
   #coop input.name { margin: 4px 0 6px; padding: 7px 10px; font-size: 17px; }
   #coop .wait { margin: 4px 0; font-size: 14px; }
   #coop .btns { position: sticky; bottom: -12px; z-index: 2; background: rgba(16, 20, 26, 0.98); padding: 6px 0; }
+}
+
+/* ---------- Åbningen: titelskærm og "drej telefonen" ---------- */
+#splash { position: fixed; inset: 0; z-index: 40; overflow: hidden; cursor: pointer; pointer-events: auto; background: #000; transition: opacity 0.8s ease 0.1s; user-select: none; -webkit-user-select: none; touch-action: none; }
+#splash.out { opacity: 0; pointer-events: none; }
+.iscene { position: absolute; inset: 0; overflow: hidden; }
+.iscene > div { position: absolute; left: 0; right: 0; }
+.iscene svg { display: block; width: 100%; height: 100%; }
+.iscene .sky { inset: 0; background: linear-gradient(180deg, #070b1d 0%, #1b1f45 34%, #4a2c58 58%, #a8494a 80%, #f0903e 100%); }
+.iscene .stars { inset: 0; }
+.iscene .stars i { position: absolute; width: 2px; height: 2px; background: #fff6dc; opacity: 0.2; animation: twinkle 2.8s infinite; }
+@keyframes twinkle { 50% { opacity: 0.9; } }
+.iscene .far { bottom: 16%; height: 34%; opacity: 0.95; }
+.iscene .giant { bottom: 14%; height: 33%; animation: giantRise 3.2s cubic-bezier(0.2, 0.7, 0.2, 1) 0.4s both, giantBreathe 4s ease-in-out 3.6s infinite; }
+.iscene .giant .glow { filter: drop-shadow(0 0 0.6px #ffb36b) drop-shadow(0 0 2px #ff7a1a); animation: eyes 2.2s ease-in-out infinite; }
+@keyframes giantRise { from { transform: translateY(70%); } to { transform: translateY(0); } }
+@keyframes giantBreathe { 50% { transform: translateY(1.5%); } }
+@keyframes eyes { 50% { opacity: 0.55; } }
+.iscene .near { bottom: 0; height: 24%; }
+.iscene .wall { bottom: 0; height: 13%; }
+.iscene .wall rect[fill="#ffb05a"] { filter: drop-shadow(0 0 3px #ff9a3c); }
+.ifront { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 11vh; text-align: center; transition: transform 0.8s ease, opacity 0.6s ease; }
+#splash.out .ifront { transform: scale(1.18); opacity: 0; }
+.ilogo { margin: 0; font: 400 clamp(46px, 11vw, 132px)/0.9 var(--pixel); color: #fff3d6; letter-spacing: 0.04em; text-shadow: 0 0.06em 0 #8a5a22, 0 0.12em 0 #4a2f12, 0 0.2em 0.35em rgba(0, 0, 0, 0.6); animation: logoThud 0.45s ease-out 1.15s; }
+.ilogo span { display: inline-block; animation: blockDrop 0.7s cubic-bezier(0.3, 1.4, 0.5, 1) var(--d) both; }
+.ilogo div + div { color: var(--gold); }
+@keyframes blockDrop { 0% { transform: translateY(-120vh) rotate(-25deg); opacity: 0; } 60% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes logoThud { 0%, 100% { transform: none; } 25% { transform: translate(-4px, 5px); } 50% { transform: translate(4px, -2px); } 75% { transform: translate(-2px, 2px); } }
+.itag { margin-top: 2.2vh; font: 600 clamp(15px, 2.2vw, 24px) var(--cond); letter-spacing: 0.22em; text-transform: uppercase; color: #ffd9a8; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8); animation: fadeUp 0.8s ease 1.5s both; }
+.igo { margin-top: auto; margin-bottom: 15vh; padding: 12px 26px; font: clamp(15px, 2vw, 22px) var(--pixel); color: #1b1408; background: var(--gold); box-shadow: 0 4px 0 #8a5a22, 0 10px 24px rgba(0, 0, 0, 0.5); animation: fadeUp 0.6s ease 2.3s both, goPulse 1.4s ease-in-out 3s infinite; }
+@keyframes goPulse { 50% { transform: scale(1.06); box-shadow: 0 4px 0 #8a5a22, 0 0 28px rgba(242, 193, 78, 0.7); } }
+.imodes { position: absolute; bottom: calc(9vh + 10px); display: flex; gap: 10px; animation: fadeUp 0.6s ease 2.6s both; }
+.imodes span { padding: 3px 10px; font: 600 13px var(--cond); letter-spacing: 0.15em; text-transform: uppercase; color: #f3e2b8; background: rgba(10, 8, 14, 0.55); border: 1px solid rgba(242, 193, 78, 0.35); }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+#splash .iscene { top: 9vh; bottom: 9vh; transition: transform 1.2s ease; }
+#splash.out .iscene { transform: scale(1.08); }
+#splash .bars i { position: absolute; left: 0; right: 0; height: 9vh; background: #000; transition: transform 0.7s ease; }
+#splash .bars i:first-child { top: 0; }
+#splash .bars i:last-child { bottom: 0; }
+#splash.out .bars i:first-child { transform: translateY(-100%); }
+#splash.out .bars i:last-child { transform: translateY(100%); }
+@media (max-height: 560px) {
+  .ifront { padding-top: 13vh; }
+  .ilogo { font-size: clamp(40px, 9.5vw, 96px); }
+  .igo { margin-bottom: 14vh; padding: 9px 20px; }
+  .imodes { display: none; }
+  .iscene .giant { height: 27%; bottom: 13%; }
+}
+/* Drej telefonen (højkant) */
+#rotate .ifront { padding-top: 12vh; }
+#rotate .ilogo { font-size: clamp(44px, 17vw, 90px); }
+#rotate .iscene .giant { left: 18%; right: 18%; height: 30%; bottom: 14%; }
+#rotate .itag { font-size: 13px; letter-spacing: 0.16em; }
+#rotate .iphone { margin-top: auto; background: rgba(10, 8, 14, 0.6); width: 42px; height: 72px; border: 4px solid var(--gold); border-radius: 9px; position: relative; box-shadow: 0 0 22px rgba(242, 193, 78, 0.45); animation: turnPhone 2.6s ease-in-out infinite; }
+#rotate .iphone i { position: absolute; left: 50%; bottom: 5px; width: 8px; height: 3px; margin-left: -4px; background: var(--gold); }
+@keyframes turnPhone { 0%, 25% { transform: rotate(0); } 55%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
+#rotate .irot { margin: 18px 0 4vh; font: 14px/1.6 var(--pixel); color: var(--gold); text-shadow: 0 2px 6px #000; }
+@media (prefers-reduced-motion: reduce) {
+  .ilogo, .ilogo span, .iscene .giant, .itag, .igo, .imodes, #rotate .iphone { animation: none !important; }
 }

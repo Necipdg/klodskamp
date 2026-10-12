@@ -31,6 +31,7 @@ import * as THREE from 'three';
 import { CoopSession, cleanCode, type NetMsg } from './net/coop';
 import { ClientSync, HostSync, type NetHooks } from './net/sync';
 import { CoopUI } from './ui/coopUi';
+import { Splash, rotateHtml } from './ui/intro';
 
 type State = 'menu' | 'intro' | 'play' | 'paused' | 'end';
 type Mode = 'tactical' | 'hunt';
@@ -135,7 +136,7 @@ const ui = new UI(settings, {
 const touch = new TouchControls(input, { pause: () => pauseGame() });
 const rotateEl = document.createElement('div');
 rotateEl.id = 'rotate';
-rotateEl.innerHTML = '<div><b>↻</b>Drej telefonen vandret for at spille</div>';
+rotateEl.innerHTML = rotateHtml();
 document.body.append(rotateEl);
 function applyTouchMode() {
   const on = settings.touch === 'on' || (settings.touch === 'auto' && isTouchDevice());
@@ -143,6 +144,7 @@ function applyTouchMode() {
   ui.touch = on;
   huntUi.touch = on;
   document.body.classList.toggle('touch', on);
+  touch.fireZone = settings.rightSide === 'skyd';
   touch.root.style.setProperty('--u', settings.buttons === 'lille' ? '0.85vmin' : settings.buttons === 'stor' ? '1.18vmin' : '1vmin');
   if (benchHold < performance.now()) fpsEl.hidden = !settings.showFps && !location.hash.includes('fps');
 }
@@ -360,7 +362,7 @@ function startHuntNow(map: HuntMapId, diff: Difficulty = lastHuntDiff, seed = (M
 
 function beginPlay() {
   sound.unlock();
-  if (input.touchMode && state === 'intro') setTimeout(() => (mode === 'hunt' ? huntUi : ui).note('Tip: hold SKYD og træk for at sigte, mens du skyder'), 600);
+  if (input.touchMode && state === 'intro') setTimeout(() => (mode === 'hunt' ? huntUi : ui).note(settings.rightSide === 'skyd' ? 'Tip: tryk og træk på højre side = skyd og sigt' : 'Tip: hold SKYD og træk for at sigte, mens du skyder'), 600);
   if (mode === 'hunt') { huntUi.hideIntro(); huntUi.showHud(); }
   else { ui.hideIntro(); ui.showHud(); }
   state = 'play';
@@ -1114,6 +1116,16 @@ applyResolution(true);
 toMenu(true);
 updateInstall();
 if (inviteCode && coopCapable()) { ui.hideMenu(); coopUi.showJoin(inviteCode, settings.name); }
+// Titelskærmen (ikke ved invitationslink, og ikke i de automatiske tests – medmindre ?intro)
+else if (!navigator.webdriver || new URLSearchParams(location.search).has('intro')) {
+  new Splash(input.touchMode, () => {
+    sound.unlock();
+    // Kæmpen brøler, når man trykker (lyden må først starte efter et tryk)
+    const L = sound.listener;
+    setTimeout(() => sound.giantRoar({ x: L.x, y: L.y, z: L.z - 25 }, true), 60);
+    if (input.touchMode) goFullscreen();
+  });
+}
 requestAnimationFrame(frame);
 
 // ---------- Testkroge (bruges af scripts/*.mjs) ----------

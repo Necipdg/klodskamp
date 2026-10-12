@@ -40,7 +40,7 @@ await tap('text=Start jagten');
 await page.waitForFunction(() => window.__kk.state().state === 'intro', null, { timeout: 120000 });
 await frames(2);
 ok(await vis('#huntintro'), 'styrings-kortet vises');
-ok((await page.textContent('#huntintro')).includes('Træk på højre side'), 'styrings-kortet forklarer touch-styringen');
+ok((await page.textContent('#huntintro')).includes('højre side'), 'styrings-kortet forklarer touch-styringen');
 await page.screenshot({ path: `${out}/m2-intro.png` });
 await tap('#huntintro >> text=Klik for at starte');
 await frames(3);
@@ -68,6 +68,24 @@ await frames(2);
 const y1 = await ev(() => window.__kk.hunt.player.yaw);
 ok(Math.abs(y1 - y0) > 0.05, 'kig ved at trække (samtidig med styrepinden)');
 await fUp(2); await fUp(1);
+// Hele højre side skyder også (standard) – én finger
+await frames(1);
+await ev(() => { window.__kk.hunt.player.primary.mag = 30; });
+await fDown(7, 520, 200);
+await fMove(7, 580, 190);
+await frames(4);
+ok(await ev(() => window.__kk.input.mouseDown && window.__kk.hunt.player.primary.mag < 30), 'tryk på højre side skyder (uden at ramme SKYD-knappen)');
+await fUp(7);
+await frames(1);
+ok(await ev(() => !window.__kk.input.mouseDown), 'slip højre side: holder op med at skyde');
+// Indstillingen "Kun kig": højre side skyder ikke
+await ev(() => { window.__kk.touch.fireZone = false; window.__kk.hunt.player.primary.mag = 30; });
+await fDown(8, 520, 200);
+await fMove(8, 560, 200);
+await frames(3);
+ok(await ev(() => !window.__kk.input.mouseDown && window.__kk.hunt.player.primary.mag === 30), '"Kun kig": højre side kigger uden at skyde');
+await fUp(8);
+await ev(() => { window.__kk.touch.fireZone = true; });
 await frames(1);
 ok(await ev(() => window.__kk.input.axisX === 0 && window.__kk.input.axisY === 0), 'styrepinden slippes');
 
