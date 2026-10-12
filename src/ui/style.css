@@ -347,7 +347,14 @@ body.touch #hunthud .boss { top: 66px; width: 240px; }
 /* Telefon på højkant: bed om at dreje den */
 #rotate { display: none; }
 @media (orientation: portrait) {
-  body.touch #rotate { display: block; position: fixed; inset: 0; z-index: 50; background: #0b1026; overflow: hidden; }
+  body.touch #rotate { display: block; position: fixed; inset: 0; z-index: 50; background: #0b1026; overflow: hidden;
+    /* iPhone-app: dæk også stribe under hjem-linjen (ellers bliver bunden sort) */
+    bottom: calc(-1 * env(safe-area-inset-bottom, 0px)); min-height: calc(100% + env(safe-area-inset-bottom, 0px)); }
+  /* Hvis der alligevel er en stribe, har den murens farve */
+  html:has(body.touch), body.touch { background: #141018; }
+}
+@supports (height: 100lvh) {
+  @media (orientation: portrait) { body.touch #rotate { min-height: max(100lvh, calc(100% + env(safe-area-inset-bottom, 0px))); } }
 }
 
 
@@ -468,6 +475,7 @@ body.touch #hunthud .team .m .b { width: 34px; }
 @keyframes eyes { 50% { opacity: 0.55; } }
 .iscene .near { bottom: 0; height: 24%; }
 .iscene .wall { bottom: 0; height: 13%; }
+#rotate .iscene .wall { height: 16%; }
 .iscene .wall rect[fill="#ffb05a"] { filter: drop-shadow(0 0 3px #ff9a3c); }
 .ifront { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 11vh; text-align: center; transition: transform 0.8s ease, opacity 0.6s ease; }
 #splash.out .ifront { transform: scale(1.18); opacity: 0; }

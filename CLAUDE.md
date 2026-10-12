@@ -99,6 +99,8 @@ Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netl
   på en levende kæmpe inden for 110 m (`autoFire` i main.ts, `hunt.trace`), sigtekornet bliver rødt (`huntUi.autoLock`).
   Taktisk kamp: Auto = kun kig (skyd med SKYD). Sikkerhedsnet i touch.ts: ingen fingre på skærmen → `releaseAll()`.
   `mobile-test.mjs` 38 tjek.
+- v1.2.2 (12.10.2026): "Drej telefonen" dækker nu også striben under hjem-linjen på iPhone-appen (bunden var sort):
+  `#rotate` går ned i `env(safe-area-inset-bottom)` / `100lvh`, og siden har murens farve bagved på højkant.
 - Næste skridt: Necip prøver at spille sammen med familien. Mulige næste idéer: TURN-server hvis forbindelsen
   fejler på mobilnet, flere våben, co-op i taktisk kamp.
 
