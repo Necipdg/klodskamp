@@ -71,7 +71,7 @@ const WALL = (() => {
   rows.push(Array.from({ length: w }, (_, x) => (x % 6 < 3 ? 'w' : '.')).join(''));
   for (let y = 0; y < 9; y++) {
     rows.push(Array.from({ length: w }, (_, x) => {
-      const gx = x - 70;
+      const gx = x - 84;
       if (gx >= 0 && gx < 8 && y >= 2 && !(y === 2 && (gx === 0 || gx === 7))) return y === 2 || gx === 0 || gx === 7 ? 'w' : 'g';
       return (x + y * 3) % 11 === 0 ? 'd' : 'w';
     }).join(''));

@@ -101,6 +101,8 @@ Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netl
   `mobile-test.mjs` 38 tjek.
 - v1.2.2 (12.10.2026): "Drej telefonen" dækker nu også striben under hjem-linjen på iPhone-appen (bunden var sort):
   `#rotate` går ned i `env(safe-area-inset-bottom)` / `100lvh`, og siden har murens farve bagved på højkant.
+  Teksten holdes over hjem-linjen (`padding-bottom` = 2× safe area), og den glødende port er flyttet ud til højre kant,
+  så den ikke dækker "Drej telefonen vandret".
 - Næste skridt: Necip prøver at spille sammen med familien. Mulige næste idéer: TURN-server hvis forbindelsen
   fejler på mobilnet, flere våben, co-op i taktisk kamp.
 
