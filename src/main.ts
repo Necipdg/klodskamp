@@ -224,12 +224,50 @@ ui.drawHuntMap = (c, id) => {
 };
 
 function applySettings(s: Settings) {
+  const sharpChanged = s.sharp !== settings.sharp;
   Object.assign(settings, s);
   saveSettings(settings);
   applyTouchMode();
   sound.setVolume(settings.volume);
   if (view.quality !== settings.quality) view.setQuality(settings.quality);
   view.setFov(settings.fov);
+  if (sharpChanged) applyResolution(true);
+}
+
+// ---------- Skarphed (opløsning) ----------
+// Telefoner har 2-3 skærmpixels pr. punkt. Før tegnede Lav grafik kun 0,8 pixel pr. punkt (sløret billede).
+// "Auto" starter skarpt og går et trin ned, hvis billedhastigheden falder under ca. 45 FPS (og prøver ikke det trin igen).
+const RES_LEVELS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+let resIdx = 0, resCap = 99, resT = 0, resN = 0, resSkip = 1;
+function resLevels() {
+  const d = Math.min(2, window.devicePixelRatio || 1);
+  const min = d >= 1.5 ? 1 : 0.75; // skærme med mange pixels skal ikke under 1 (så bliver det grumset)
+  return RES_LEVELS.filter((r) => r >= min && r <= d + 0.01);
+}
+function applyResolution(reset: boolean) {
+  const d = Math.min(2, window.devicePixelRatio || 1);
+  if (settings.sharp !== 'auto') { view.setResolution(settings.sharp === 'lav' ? Math.min(d, 1) : settings.sharp === 'mellem' ? Math.min(d, 1.5) : d); return; }
+  const lv = resLevels();
+  if (reset) {
+    resCap = lv.length;
+    const start = isTouchDevice() ? 1.5 : 2;
+    resIdx = Math.max(0, lv.filter((r) => r <= start + 0.01).length - 1);
+    resT = 0; resN = 0; resSkip = 1;
+  }
+  resIdx = Math.min(resIdx, lv.length - 1);
+  view.setResolution(lv[resIdx]);
+}
+/** Kaldes hvert billede: mål billedhastigheden i 2,5 s ad gangen, mens man spiller */
+function autoResolution(dt: number) {
+  if (settings.sharp !== 'auto' || state !== 'play' || document.hidden) { resT = 0; resN = 0; return; }
+  resT += dt; resN++;
+  if (resT < 2.5) return;
+  const fps = resN / resT;
+  resT = 0; resN = 0;
+  if (resSkip > 0) { resSkip--; return; } // første måling efter start/skift tæller ikke (indlæsning)
+  const lv = resLevels();
+  if (fps < 45 && resIdx > 0) { resCap = resIdx; resIdx--; resSkip = 1; view.setResolution(lv[resIdx]); }
+  else if (fps > 57 && resIdx + 1 < Math.min(resCap, lv.length)) { resIdx++; resSkip = 1; view.setResolution(lv[resIdx]); }
 }
 
 // ---------- Tilstande ----------
@@ -322,6 +360,7 @@ function startHuntNow(map: HuntMapId, diff: Difficulty = lastHuntDiff, seed = (M
 
 function beginPlay() {
   sound.unlock();
+  if (input.touchMode && state === 'intro') setTimeout(() => (mode === 'hunt' ? huntUi : ui).note('Tip: hold SKYD og træk for at sigte, mens du skyder'), 600);
   if (mode === 'hunt') { huntUi.hideIntro(); huntUi.showHud(); }
   else { ui.hideIntro(); ui.showHud(); }
   state = 'play';
@@ -956,8 +995,9 @@ function frame(now: number) {
   last = now;
   frames++;
   fpsAcc += dt; fpsN++; fpsWorst = Math.max(fpsWorst, dt);
+  autoResolution(dt);
   if (fpsAcc >= 1 && performance.now() > benchHold) {
-    fpsEl.textContent = `${Math.round(fpsN / fpsAcc)} FPS · værste ${Math.round(fpsWorst * 1000)} ms · ${view.renderer.info.render.calls} kald`;
+    fpsEl.textContent = `${Math.round(fpsN / fpsAcc)} FPS · værste ${Math.round(fpsWorst * 1000)} ms · ${view.renderer.info.render.calls} kald · skarphed ×${view.resolution}`;
     fpsAcc = 0; fpsN = 0; fpsWorst = 0;
   }
   // Touch-knapper kun mens man spiller (ikke i menuer, pause eller købsmenuen)
@@ -1070,6 +1110,7 @@ async function installApp() {
 // Åbnet fra et invitationslink (?rum=KODE): vis "Du er inviteret"
 const inviteCode = cleanCode(new URLSearchParams(location.search).get('rum') ?? '');
 applyTouchMode();
+applyResolution(true);
 toMenu(true);
 updateInstall();
 if (inviteCode && coopCapable()) { ui.hideMenu(); coopUi.showJoin(inviteCode, settings.name); }

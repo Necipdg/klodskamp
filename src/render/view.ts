@@ -83,10 +83,17 @@ export class GameView {
     window.addEventListener('resize', () => this.resize());
   }
 
+  /** Opløsning i pixels pr. skærmpunkt (indstillingen Skarphed – "Auto" justeres løbende i main.ts) */
+  resolution = 0;
+  setResolution(r: number) {
+    if (Math.abs(r - this.resolution) < 0.01) return;
+    this.resolution = r;
+    this.renderer.setPixelRatio(r);
+    this.resize();
+  }
+
   setQuality(q: Quality) {
     this.quality = q;
-    const dpr = window.devicePixelRatio || 1;
-    this.renderer.setPixelRatio(q === 0 ? Math.min(dpr, 1) * 0.8 : q === 1 ? Math.min(dpr, 1.25) : Math.min(dpr, 2));
     this.renderer.shadowMap.enabled = q > 0;
     this.sun.castShadow = q > 0;
     const size = q === 2 ? 2048 : 1024;
@@ -171,8 +178,9 @@ export class GameView {
     const fog = this.scene.fog as THREE.Fog;
     if (!this.hunt) { this.camera.far = 600; this.camera.updateProjectionMatrix(); return; }
     const [near, far] = this.hunt.city.fog;
-    const f = this.quality === 0 ? Math.min(far, 190) : far;
-    fog.near = Math.min(near, f * 0.45); fog.far = f;
+    // Lav grafik tegner kortere ud (mindre at tegne), men tågen begynder først langt ude, så det fjerne ikke bliver diset
+    const f = this.quality === 0 ? Math.min(far, 220) : far;
+    fog.near = Math.min(near, f * 0.5); fog.far = f;
     this.camera.far = this.quality === 0 ? f + 30 : 600;
     this.camera.updateProjectionMatrix();
   }

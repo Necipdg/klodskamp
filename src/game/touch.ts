@@ -69,8 +69,14 @@ export class TouchControls {
       const el = document.createElement('div');
       el.className = `tb ${b.cls}`;
       el.dataset.act = b.act;
-      if (b.look) el.dataset.look = '1';
       el.textContent = b.label;
+      if (b.look) {
+        // Kan trækkes: sigt med samme tommelfinger, mens knappen holdes
+        el.dataset.look = '1';
+        const s = document.createElement('small');
+        s.textContent = '✥';
+        el.append(s);
+      }
       this.root.append(el);
     }
     const p = document.createElement('div');

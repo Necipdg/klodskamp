@@ -80,6 +80,13 @@ Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netl
   +6 `tests/sync.test.ts` med falsk forbindelse) + `scripts/coop-test.mjs` (27 tjek: 3 browsere med rigtig WebRTC via
   lokal signalserver `npx peerjs --port 9000 --host 127.0.0.1`, `?peer=127.0.0.1:9000`). IKKE testet på rigtige
   telefoner/mobilnet – nogle mobilnet kan blokere direkte forbindelser (kræver TURN).
+- v1.1.1 (12.10.2026): **skarpere på telefoner** – opløsningen er skilt fra Grafik (før: Lav = 0,8 pixel pr. skærmpunkt,
+  meget sløret på telefoner med 3× skærm). Ny indstilling **Skarphed** (Auto/Lav/Mellem/Høj = auto/1/1,5/2, højst
+  skærmens). Auto (`autoResolution` i main.ts) starter på 1,5 (telefon) / 2 (computer), måler FPS hver 2,5 s mens man
+  spiller, går et trin ned under 45 FPS (og prøver ikke det trin igen), op over 57 FPS; aldrig under 1 på skærme med
+  ≥1,5. `GameView.setResolution()`. Lav grafik: tågen starter ved 50 % af 220 m (før 45 % af 190 m).
+  FPS-visningen viser skarpheden. Touch: SKYD/KROG har ✥ (kan trækkes = sigt mens man skyder – virkede allerede),
+  tydeligere forklaring og et tip ved start. `mobile-test.mjs` tjekker nu "hold SKYD og træk" (32 tjek).
 - Næste skridt: Necip prøver at spille sammen med familien. Mulige næste idéer: TURN-server hvis forbindelsen
   fejler på mobilnet, flere våben, co-op i taktisk kamp.
 

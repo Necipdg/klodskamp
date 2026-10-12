@@ -20,6 +20,13 @@ Blokspil i browseren med to spiltyper, der vælges på startskærmen:
 - **Udvikling:** `npm install` og derefter `npm run dev`. `npm run build:app` bygger app-versionen i `dist/`.
   Hvert push til `main` på GitHub bygger og udgiver appen automatisk (`.github/workflows/pages.yml`).
 
+## Skarpere billede på telefonen (ny i v1.1.1)
+
+- **Indstillinger → Skarphed**: *Auto* (standard) tegner så skarpt som telefonen kan nå med jævn billedhastighed og går
+  selv et trin ned, hvis det hakker. *Lav/Mellem/Høj* låser skarpheden. Grafik (Lav/Mellem/Høj) styrer nu kun
+  skygger, skyer og synsvidde. Tryk F3/"Vis FPS" for at se den aktuelle skarphed.
+- **Skyd og sigt med samme tommelfinger**: hold SKYD (eller KROG) og træk – knapperne er mærket med ✥.
+
 ## Spil sammen (ny i v1.1)
 
 Kæmpejagt for 2–4 spillere på samme hold – fx hele familien på hver sin telefon, tablet eller computer.

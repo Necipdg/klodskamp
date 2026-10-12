@@ -33,7 +33,8 @@ const fmtTime = (s: number) => { s = Math.max(0, Math.round(s)); return `${Math.
 /** Touch-styringen forklaret (telefon/tablet) */
 export function touchControlsHtml(mode: 'hunt' | 'tactical') {
   const common = `<span class="k">VENSTRE</span><span>Sæt tommelfingeren på venstre side og træk: <b>gå/løb</b> (og styr i luften)</span>
-    <span class="k">HØJRE</span><span>Træk på højre side for at <b>kigge og sigte</b> – også mens du holder SKYD${mode === 'hunt' ? ' eller KROG' : ''} nede</span>`;
+    <span class="k">HØJRE</span><span>Træk på højre side for at <b>kigge og sigte</b></span>
+    <span class="k">SKYD ✥</span><span><b>Hold SKYD${mode === 'hunt' ? ' (eller KROG)' : ''} og træk</b> med samme tommelfinger: du skyder og sigter på én gang</span>`;
   const hunt = `<span class="k">KROG</span><span><b>Hold</b>: krogen sidder fast, slip for at løsne · <b>SPOL</b> spoler hurtigt ind</span>
     <span class="k">BOOST</span><span>Hop · hold i luften: gas-boost i sigteretningen · <b>BREMS</b> tager farten og landingen</span>
     <span class="k">SKYD</span><span>Hold for at skyde · <b>↻</b> genlad · <b>⇄</b> skift våben</span>

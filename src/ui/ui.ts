@@ -306,6 +306,17 @@ export class UI {
     }
     q.append(el('span', '', 'Grafik'), seg, el('span', 'v', ''));
     c.append(q);
+    const sq = el('div', 'setting');
+    const sseg = el('div', 'seg');
+    for (const [k, n] of [['auto', 'Auto'], ['lav', 'Lav'], ['mellem', 'Mellem'], ['hoj', 'Høj']] as [Settings['sharp'], string][]) {
+      const b = el('button', k === s.sharp ? 'on' : '', n);
+      b.dataset.sharp = k;
+      b.onclick = () => { s.sharp = k; sseg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); this.cb.settings(s); };
+      sseg.append(b);
+    }
+    sq.append(el('span', '', 'Skarphed'), sseg, el('span', ''));
+    sq.title = 'Hvor mange pixels der tegnes. Auto: så skarpt som telefonen/computeren kan nå med jævn billedhastighed.';
+    c.append(sq);
     const inv = el('div', 'setting');
     const cb = el('input') as HTMLInputElement;
     cb.type = 'checkbox'; cb.checked = s.invertY;

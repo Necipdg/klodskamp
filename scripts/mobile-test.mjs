@@ -79,6 +79,15 @@ await frames(3);
 await fUp(3);
 await frames(1);
 ok(await ev(() => window.__kk.hunt.player.primary.mag < 30), 'SKYD skyder');
+// Skyd og sigt med samme tommelfinger: hold SKYD og træk
+await ev(() => { const h = window.__kk.hunt; h.player.primary.mag = 30; h.player.yaw = 0; h.player.pitch = 0; });
+await fDown(3, fire.x, fire.y);
+for (let i = 1; i <= 6; i++) { await fMove(3, fire.x - i * 12, fire.y - i * 3); await frames(1); }
+const aim = await ev(() => ({ yaw: window.__kk.hunt.player.yaw, pitch: window.__kk.hunt.player.pitch, mag: window.__kk.hunt.player.primary.mag, held: window.__kk.input.mouseDown }));
+await fUp(3);
+await frames(1);
+ok(aim.held && aim.mag < 30 && aim.yaw > 0.05 && aim.pitch > 0.01, `hold SKYD og træk: skyder og drejer på samme tid (drejet ${aim.yaw.toFixed(2)} rad)`);
+ok(await ev(() => !window.__kk.input.mouseDown), 'slip SKYD: holder op med at skyde');
 
 // Krog: sigt mod porthuset og hold KROG
 await ev(() => { const h = window.__kk.hunt, p = h.player; p.yaw = 0; p.pitch = 0.15; });
