@@ -16,6 +16,9 @@ const BUTTONS: Record<TouchLayout, Btn[]> = {
     { act: 'key:KeyR', label: '↻', cls: 'b-reload' },
     { act: 'key:KeyQ', label: '⇄', cls: 'b-weapon' },
     { act: 'key:KeyB', label: 'OPGRADÉR', cls: 'b-shop buy' },
+    // Kun når man spiller sammen
+    { act: 'key:KeyV', label: '🎤', cls: 'b-mic coopbtn' },
+    { act: 'key:KeyT', label: '💬', cls: 'b-chat coopbtn' },
   ],
   tactical: [
     { act: 'fire', label: 'SKYD', cls: 'b-fire', look: true },
@@ -88,6 +91,16 @@ export class TouchControls {
     p.dataset.act = 'pause';
     p.textContent = 'II';
     this.root.append(p);
+  }
+
+  /** Spil sammen: vis mikrofon- og beskedknapperne; mikrofonens tilstand ses på knappen */
+  setCoop(on: boolean, mic: 'off' | 'on' | 'muted') {
+    this.root.classList.toggle('coop', on);
+    const b = this.root.querySelector('.b-mic') as HTMLElement | null;
+    if (b && b.dataset.mic !== mic) {
+      b.dataset.mic = mic;
+      b.firstChild!.textContent = mic === 'muted' ? '🔇' : '🎤';
+    }
   }
 
   /** Vis/skjul KØB-knappen (kun i købsfasen) */

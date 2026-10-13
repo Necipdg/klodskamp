@@ -280,6 +280,13 @@ canvas#game { touch-action: none; }
 #touch .b-a4 { right: calc(calc(27 * var(--u)) + env(safe-area-inset-right)); bottom: calc(40 * var(--u)); }
 #touch .b-reload { width: calc(11 * var(--u)); height: calc(11 * var(--u)); right: calc(calc(3 * var(--u)) + env(safe-area-inset-right)); bottom: calc(45 * var(--u)); font-size: calc(4.5 * var(--u)); }
 #touch .b-weapon { width: calc(11 * var(--u)); height: calc(11 * var(--u)); right: calc(calc(15 * var(--u)) + env(safe-area-inset-right)); bottom: calc(45 * var(--u)); font-size: calc(4.5 * var(--u)); }
+#touch .coopbtn { display: none; }
+#touch.coop .coopbtn { display: flex; }
+#touch .b-mic, #touch .b-chat { width: calc(10 * var(--u)); height: calc(10 * var(--u)); top: calc(14 * var(--u)); font-size: calc(4.4 * var(--u)); }
+#touch .b-mic { right: calc(calc(3 * var(--u)) + env(safe-area-inset-right)); opacity: 0.55; }
+#touch .b-mic[data-mic="on"] { opacity: 1; border-color: var(--ok); box-shadow: 0 0 10px rgba(109, 222, 138, 0.5); }
+#touch .b-mic[data-mic="muted"] { opacity: 1; border-color: var(--danger); }
+#touch .b-chat { right: calc(calc(15 * var(--u)) + env(safe-area-inset-right)); }
 #touch .b-pause { width: calc(10 * var(--u)); height: calc(10 * var(--u)); right: calc(calc(2 * var(--u)) + env(safe-area-inset-right)); top: calc(2 * var(--u)); border-radius: 8px; }
 #touch .b-board { width: calc(14 * var(--u)); height: calc(8 * var(--u)); right: calc(calc(14 * var(--u)) + env(safe-area-inset-right)); top: calc(3 * var(--u)); border-radius: 8px; font-size: calc(2.4 * var(--u)); }
 #touch .stick { position: absolute; left: calc(calc(18 * var(--u)) + env(safe-area-inset-left)); top: calc(100% - calc(20 * var(--u))); width: calc(26 * var(--u)); height: calc(26 * var(--u)); margin: calc(-13 * var(--u)) 0 0 calc(-13 * var(--u)); border-radius: 50%; background: rgba(14, 18, 24, 0.25); border: 2px solid rgba(242, 193, 78, 0.3); opacity: 0.5; pointer-events: none; }
@@ -516,3 +523,23 @@ body.touch #hunthud .team .m .b { width: 34px; }
 @media (prefers-reduced-motion: reduce) {
   .ilogo, .ilogo span, .iscene .giant, .itag, .igo, .imodes, #rotate .iphone { animation: none !important; }
 }
+
+/* ---------- Spil sammen: hurtige beskeder og mikrofon ---------- */
+#qchat { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); z-index: 6; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px; width: min(440px, 70vw); }
+#qchat.hidden { display: none; }
+#qchat .btn { margin: 0; padding: 9px 12px; font-size: 16px; }
+#qchat .btn .key { margin: 0 8px 0 0; }
+#hunthud .qfeed { position: absolute; left: 18px; top: 330px; display: flex; flex-direction: column; gap: 3px; pointer-events: none; }
+#hunthud .qfeed .q { padding: 3px 8px; background: rgba(10, 12, 16, 0.7); border-left: 3px solid var(--gold); font: 600 15px var(--cond); color: #f3ead6; }
+@media (max-width: 900px) { #hunthud .qfeed { top: 268px; } }
+body.touch #hunthud .qfeed { left: calc(8px + env(safe-area-inset-left)); top: 206px; }
+body.touch #hunthud .qfeed .q { font-size: 13px; }
+body.touch #qchat { top: 16%; }
+#hunthud .team .tk { font: 11px var(--cond); color: var(--muted); letter-spacing: 0.5px; margin-top: 2px; }
+#hunthud .team .tk b { color: var(--gold); font-family: var(--pixel); font-weight: 400; }
+#hunthud .team .m .mic { font-size: 12px; line-height: 1; filter: grayscale(0.3); }
+#hunthud .team .m .mic.talk { filter: drop-shadow(0 0 4px #6dde8a); }
+#coop .btn.voice { margin-bottom: 10px; }
+#coop .btn.voice.on { border-left-color: var(--ok); color: var(--ok); }
+#coop .players .p .mic { margin-left: 6px; font-size: 14px; }
+#coop .players .p .mic.talk { filter: drop-shadow(0 0 4px #6dde8a); }

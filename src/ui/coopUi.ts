@@ -5,6 +5,7 @@ import { HUNT_MAPS } from '../hunt/maps';
 import { HUNT_DIFF } from '../hunt/progress';
 import { MAX_PLAYERS, inviteLink, type CoopSession } from '../net/coop';
 import { MATE_COLOR } from './huntUi';
+import type { VoiceChat } from '../net/voice';
 
 export interface CoopCallbacks {
   create(name: string, map: HuntMapId, diff: Difficulty): void;
@@ -27,6 +28,10 @@ export class CoopUI {
   private root = el('div', 'overlay hidden');
   private players: HTMLElement | null = null;
   private status: HTMLElement | null = null;
+  private voiceBtn: HTMLButtonElement | null = null;
+  private voiceMsg: HTMLElement | null = null;
+  /** Stemmechatten (sættes af main.ts, når rummet er oprettet/man er kommet ind) */
+  voice: VoiceChat | null = null;
 
   constructor(private cb: CoopCallbacks) {
     this.root.id = 'coop';
@@ -34,7 +39,7 @@ export class CoopUI {
   }
 
   get open() { return !this.root.classList.contains('hidden'); }
-  hide() { this.root.classList.add('hidden'); this.root.innerHTML = ''; this.players = null; this.status = null; }
+  hide() { this.root.classList.add('hidden'); this.root.innerHTML = ''; this.players = null; this.status = null; this.voiceBtn = null; this.voiceMsg = null; }
 
   private card() {
     this.root.innerHTML = '';
@@ -159,6 +164,7 @@ export class CoopUI {
     c.append(this.players);
     this.status = el('div', 'wait');
     c.append(this.status);
+    this.voiceSection(c);
     const btns = el('div', 'btns');
     const go = el('button', 'btn primary', 'Start jagten');
     go.dataset.act = 'start';
@@ -214,19 +220,55 @@ export class CoopUI {
     c.append(this.players);
     this.status = el('div', 'wait');
     c.append(this.status);
+    this.voiceSection(c);
     const b = el('button', 'btn', 'Forlad rummet');
     b.onclick = () => this.cb.leave();
     c.append(b);
     this.refresh(s);
   }
 
+  /** "Tal sammen"-knappen i lobbyen */
+  private voiceSection(c: HTMLElement) {
+    this.voiceBtn = null; this.voiceMsg = null;
+    if (!this.voice) return;
+    const b = el('button', 'btn voice') as HTMLButtonElement;
+    b.dataset.act = 'voice';
+    b.onclick = async () => {
+      const v = this.voice;
+      if (!v) return;
+      if (v.on) v.disable();
+      else {
+        b.disabled = true;
+        const err = await v.enable();
+        b.disabled = false;
+        if (err) this.voiceError(err);
+      }
+      this.updateVoice();
+    };
+    this.voiceBtn = b;
+    this.voiceMsg = el('div', 'wait');
+    c.append(b, this.voiceMsg);
+    this.updateVoice();
+  }
+  private updateVoice() {
+    const v = this.voice, b = this.voiceBtn;
+    if (!b || !v) return;
+    b.classList.toggle('on', v.on);
+    b.innerHTML = v.on ? '🎤 Tal sammen: TIL <span class="key">TRYK FOR AT SLÅ FRA</span>' : '🎤 Tal sammen <span class="key">STEMMECHAT</span>';
+    if (this.voiceMsg) this.voiceMsg.textContent = v.on ? 'Du kan tale med dem, der også har slået "Tal sammen" til. Brug høretelefoner – så undgår I ekko.' : '';
+  }
+  /** Mikrofonen kunne ikke startes */
+  voiceError(text: string) { if (this.voiceMsg) { this.voiceMsg.textContent = text; this.voiceMsg.classList.add('err'); } }
+
   /** Opdatér spillerlisten (nogen kom ind eller gik) */
   refresh(s: CoopSession) {
+    this.updateVoice();
     if (!this.players) return;
     const rows: string[] = [];
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const p = s.players[i];
-      if (p) rows.push(`<div class="p"><i style="background:${MATE_COLOR[p.pid % MATE_COLOR.length]}"></i>${esc(p.name)}<small>${p.pid === 0 ? 'vært' : ''}${p.pid === s.pid ? (p.pid === 0 ? ' · dig' : 'dig') : ''}</small></div>`);
+      const mic = !p ? '' : p.mic === 1 ? `<span class="mic${this.voice?.talking(p.pid) ? ' talk' : ''}">🎤</span>` : p.mic === 2 ? '<span class="mic">🔇</span>' : '';
+      if (p) rows.push(`<div class="p"><i style="background:${MATE_COLOR[p.pid % MATE_COLOR.length]}"></i>${esc(p.name)}${mic}<small>${p.pid === 0 ? 'vært' : ''}${p.pid === s.pid ? (p.pid === 0 ? ' · dig' : 'dig') : ''}</small></div>`);
       else rows.push('<div class="p empty">Ledig plads</div>');
     }
     this.players.innerHTML = rows.join('');

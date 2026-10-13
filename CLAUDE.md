@@ -103,6 +103,16 @@ Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netl
   `#rotate` går ned i `env(safe-area-inset-bottom)` / `100lvh`, og siden har murens farve bagved på højkant.
   Teksten holdes over hjem-linjen (`padding-bottom` = 2× safe area), og den glødende port er flyttet ud til højre kant,
   så den ikke dækker "Drej telefonen vandret".
+- v1.3 (13.10.2026): **tal sammen** i Spil sammen. Stemmechat (`src/net/voice.ts`, `VoiceChat`): WebRTC-opkald via
+  PeerJS mellem alle der har slået "🎤 Tal sammen" til i lobbyen (eller V / 🎤-knappen i spillet); laveste pid ringer op.
+  Lobbyspillere har `peerId` og `mic` (0 fra, 1 til, 2 slået fra) – `CoopSession.setMic()` → værten sender lobbyen ud,
+  `voice.sync()` ringer op/lægger på. Hvem der taler: `getStats` (inbound-rtp/media-source audioLevel), ikke Web Audio.
+  Lyd i `<audio data-voice=pid>`; afvist autoplay prøves igen ved næste tryk. **Hurtige beskeder** (`QUICK_CHAT` i
+  sync.ts, T + 1–6 / 💬-knap): "Hjælp mig!", "Kæmpe her!", "Kom herhen" (markør på radaren), "Pas på!", "Godt skud!",
+  "Skal vi opgradere?" – sendes via værten (`sendChat`, besked 'chat'), vises under holdlisten. Holdlisten viser
+  🎤/🔊/🔇. Testet: 106 logik-tests + `coop-test.mjs` 36 tjek (Chromium med falsk mikrofon: lyd begge veje, lydniveau,
+  🔇, beskeder). IKKE testet på rigtige telefoner: ekko, lydstyrke (iPhone kan skrue ned for spillets lyd, når mikrofonen
+  er tændt) og mobilnet er ukendte.
 - Næste skridt: Necip prøver at spille sammen med familien. Mulige næste idéer: TURN-server hvis forbindelsen
   fejler på mobilnet, flere våben, co-op i taktisk kamp.
 

@@ -7,7 +7,8 @@ export const MAX_PLAYERS = 4;
 const PREFIX = 'klodskamp-v1-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // uden I, O, 0 og 1 (svære at skelne)
 
-export interface LobbyPlayer { pid: number; name: string }
+/** mic: 0 = ikke med i stemmechatten, 1 = taler med, 2 = med men har slået sin mikrofon fra */
+export interface LobbyPlayer { pid: number; name: string; peerId?: string; mic?: 0 | 1 | 2 }
 export interface CoopConfig { map: string; diff: string }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type NetMsg = { t: string; [k: string]: any };
@@ -70,6 +71,9 @@ export class CoopSession {
   onJoin: ((pid: number) => void) | null = null;
   onLeave: ((pid: number, name: string) => void) | null = null;
   private peer: Peer;
+  /** PeerJS-forbindelsen (bruges også til stemmechat) */
+  get rtc() { return this.peer; }
+  get isClosed() { return this.closed; }
   private conns = new Map<number, DataConnection>(); // værten: pid → forbindelse
   private host: DataConnection | null = null; // gæsten: forbindelsen til værten
   private nextPid = 1;
@@ -80,7 +84,7 @@ export class CoopSession {
     this.peer = peer;
     this.code = code;
     this.config = config;
-    if (role === 'host') this.players = [{ pid: 0, name }];
+    if (role === 'host') this.players = [{ pid: 0, name, peerId: peer.id, mic: 0 }];
   }
 
   /** Opret et rum (prøver en ny kode, hvis koden er optaget) */
@@ -156,7 +160,7 @@ export class CoopSession {
         pid = this.nextPid++;
         const name = String(msg.name || 'Spiller').slice(0, 16);
         this.conns.set(pid, c);
-        this.players.push({ pid, name });
+        this.players.push({ pid, name, peerId: c.peer, mic: 0 });
         c.send({ t: 'welcome', pid, players: this.players, config: this.config, started: this.started });
         this.broadcastLobby();
         this.onJoin?.(pid);
@@ -180,6 +184,23 @@ export class CoopSession {
 
   setConfig(config: CoopConfig) { this.config = config; this.broadcastLobby(); }
 
+  /** Stemmechat: meld om man er med (og om mikrofonen er slået fra) – værten fortæller alle det */
+  setMic(mic: 0 | 1 | 2) {
+    if (this.role === 'host') this.updateMic(0, mic);
+    else {
+      const me = this.players.find((p) => p.pid === this.pid);
+      if (me) me.mic = mic;
+      this.send({ t: 'mic', mic });
+      this.onLobby?.();
+    }
+  }
+  private updateMic(pid: number, mic: number) {
+    const p = this.players.find((x) => x.pid === pid);
+    if (!p) return;
+    p.mic = mic === 1 || mic === 2 ? mic : 0;
+    this.broadcastLobby();
+  }
+
   private broadcastLobby() {
     this.broadcast({ t: 'lobby', players: this.players, config: this.config });
     this.onLobby?.();
@@ -200,6 +221,7 @@ export class CoopSession {
   /** Beskeder om rummet håndteres her; resten lægges i indbakken til spillet */
   receive(from: number, msg: NetMsg) {
     if (msg.t === 'lobby') { this.players = msg.players; this.config = msg.config; this.onLobby?.(); return; }
+    if (msg.t === 'mic' && this.role === 'host') { this.updateMic(from, Number(msg.mic)); return; }
     if (msg.t === 'bye') {
       if (this.role === 'host') this.drop(from); else this.lost(typeof msg.why === 'string' ? msg.why : 'Værten har lukket rummet.');
       return;

@@ -29,7 +29,9 @@ import { HUNT_DIFF, UPGRADES } from './hunt/progress';
 import { addRecord, getRecords, today } from './game/records';
 import * as THREE from 'three';
 import { CoopSession, cleanCode, type NetMsg } from './net/coop';
-import { ClientSync, HostSync, type NetHooks } from './net/sync';
+import { ClientSync, HostSync, QUICK_CHAT, type NetHooks } from './net/sync';
+import { VoiceChat } from './net/voice';
+import { MATE_COLOR } from './ui/huntUi';
 import { CoopUI } from './ui/coopUi';
 import { Splash, rotateHtml } from './ui/intro';
 
@@ -165,6 +167,7 @@ function pauseGame() {
   state = 'paused';
   ui.closeBuy();
   huntUi.closeShop();
+  huntUi.closeChat();
   ui.showPause();
   if (input.locked) { expectUnlock = true; input.unlock(); }
 }
@@ -587,6 +590,16 @@ function readHuntInput(h: Hunt) {
     Object.assign(inp, { fwd: 0, right: 0, jump: false, hook: false, reel: false, brake: false, fire: false });
     return;
   }
+  // Spil sammen: T = hurtige beskeder (1–6 vælger), V = mikrofon
+  const chatWasOpen = huntUi.chatOpen;
+  if (h.coop) {
+    if (input.hit('KeyT')) { if (huntUi.chatOpen) huntUi.closeChat(); else huntUi.openChat(); }
+    if (input.hit('KeyV')) void toggleMic();
+    if (chatWasOpen) {
+      QUICK_CHAT.forEach((_, i) => { if (input.hit(`Digit${i + 1}`) || input.hit(`Numpad${i + 1}`)) sendQuick(i); });
+      if (input.hit('Escape')) huntUi.closeChat();
+    }
+  }
   if (input.hit('KeyB')) {
     if (h.phase === 'break') openShop();
     else huntUi.note('Opgraderinger kan kun købes mellem bølgerne');
@@ -606,8 +619,8 @@ function readHuntInput(h: Hunt) {
   inp.fire = input.mouseDown;
   if (input.mousePressed) inp.firePressed = true;
   if (input.hit('KeyR')) inp.reload = true;
-  if (input.hit('Digit1')) inp.slot = 'primary';
-  if (input.hit('Digit2')) inp.slot = 'pistol';
+  if (!chatWasOpen && input.hit('Digit1')) inp.slot = 'primary';
+  if (!chatWasOpen && input.hit('Digit2')) inp.slot = 'pistol';
   if (input.hit('KeyQ') || input.wheel) inp.slot = p.slot === 'primary' ? 'pistol' : 'primary';
 }
 
@@ -843,7 +856,47 @@ const netHooks: NetHooks = {
     if (hunt && huntUi.shopOpen) huntUi.renderShop(hunt, msg);
   },
   note(t) { huntUi.note(t); },
+  chat(pid, i, pos) { showQuick(pid, i, pos); },
 };
+
+// ---------- Tale sammen: stemmechat og hurtige beskeder ----------
+let voice: VoiceChat | null = null;
+let lobbyT = 0;
+
+/** Slå mikrofonen til (første gang: spørg om lov) – eller slå den fra/til igen */
+async function toggleMic() {
+  if (!voice) { huntUi.note('Din browser kan ikke bruge mikrofonen her'); return; }
+  if (!voice.on) {
+    const err = await voice.enable();
+    if (err) { huntUi.note(err); coopUi.voiceError(err); }
+    else huntUi.note('Mikrofonen er tændt – brug høretelefoner, så I undgår ekko');
+    return;
+  }
+  voice.setMuted(!voice.muted);
+  huntUi.note(voice.muted ? 'Din mikrofon er slået fra' : 'Din mikrofon er slået til');
+}
+
+function playerName(pid: number) { return net?.players.find((p) => p.pid === pid)?.name ?? `Spiller ${pid + 1}`; }
+
+/** Vis en hurtig besked (egen eller fra en medspiller) */
+function showQuick(pid: number, i: number, pos: { x: number; y: number; z: number }) {
+  const q = QUICK_CHAT[i];
+  if (!q || !hunt) return;
+  huntUi.chatMsg(playerName(pid), MATE_COLOR[pid % MATE_COLOR.length], q.text, q.here ? pos : null);
+  if (pid !== net?.pid) { sound.ui(); buzz(20); }
+}
+
+function sendQuick(i: number) {
+  huntUi.closeChat();
+  const h = hunt;
+  if (!h || !net || !h.coop) return;
+  const pos = { ...h.player.body.pos };
+  hostSync?.sendChat(i, pos);
+  clientSync?.sendChat(i, pos);
+  showQuick(net.pid, i, pos);
+}
+
+huntUi.onChatPick = (i) => sendQuick(i);
 
 const coopUi = new CoopUI({
   create: (name, map, diff) => { void coopCreate(name, map, diff); },
@@ -869,7 +922,11 @@ function rememberName(name: string) {
 }
 
 function wireSession(s: CoopSession) {
-  s.onLobby = () => { if (coopUi.open) coopUi.refresh(s); };
+  voice?.destroy();
+  voice = VoiceChat.supported() ? new VoiceChat(s) : null;
+  if (voice) voice.onChange = () => { if (coopUi.open && net) coopUi.refresh(net); };
+  coopUi.voice = voice;
+  s.onLobby = () => { voice?.sync(); if (coopUi.open) coopUi.refresh(s); };
   s.onClose = (reason) => {
     if (net !== s) return;
     toMenu();
@@ -973,6 +1030,10 @@ function leaveCoop(keepLink = false) {
   coopPending = false;
   huntUi.coop = null;
   coopUi.hide();
+  voice?.destroy();
+  voice = null;
+  coopUi.voice = null;
+  huntUi.closeChat();
   if (net) { net.onClose = null; net.close(); }
   net = null;
   hostSync = null;
@@ -1024,6 +1085,13 @@ function frame(now: number) {
   // Touch-knapper kun mens man spiller (ikke i menuer, pause eller købsmenuen)
   const tl = state === 'play' && input.touchMode && !ui.buyOpen && !huntUi.shopOpen ? (mode === 'hunt' ? 'hunt' : 'tactical') : null;
   touch.show(tl);
+  touch.setCoop(!!(hunt?.coop && net), voice?.on ? (voice.muted ? 'muted' : 'on') : 'off');
+  // Lobbyen: vis hvem der taler
+  if (coopUi.open && net && voice?.on) { lobbyT -= dt; if (lobbyT <= 0) { lobbyT = 0.3; coopUi.refresh(net); } }
+  if (hunt?.coop && net) {
+    // Holdlistens mikrofon-ikoner
+    huntUi.voiceState = (pid: number) => ({ mic: net?.players.find((p) => p.pid === pid)?.mic ?? 0, talk: !!voice?.talking(pid) });
+  } else huntUi.voiceState = null;
   if (tl === 'tactical' && game) touch.setBuyVisible(game.phase === 'buy');
   if (tl === 'hunt' && hunt) touch.setBuyVisible(hunt.phase === 'break' && hunt.player.alive);
   if (net && !hunt) pollLobby();
@@ -1184,6 +1252,8 @@ window.__kk = {
     for (let i = 0; i < n; i++) { hunt.step(); if (i % 12 === 0) handleHuntEvents(hunt, hunt.drainEvents()); }
     handleHuntEvents(hunt, hunt.drainEvents());
   },
+  sendQuick: (i: number) => sendQuick(i),
+  get voice() { return voice; },
   /** Co-op: hvem er jeg, og hvor mange er i rummet */
   coop: () => ({ role: net?.role ?? null, pid: net?.pid ?? -1, code: net?.code ?? '', players: net?.players.map((p) => p.name) ?? [], started: net?.started ?? false, mates: huntUi.mates.length }),
   look: (yaw: number, pitch: number) => { if (game) { game.human.yaw = yaw; game.human.pitch = pitch; } },

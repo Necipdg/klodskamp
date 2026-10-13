@@ -38,6 +38,16 @@ interface Snap {
   gs: GiantNet[]; r: [number, number, number, number, number][]; ps: PState[];
 }
 
+/** Hurtige beskeder (samme rækkefølge hos alle – kun nummeret sendes). `here` = vis en markør på radaren. */
+export const QUICK_CHAT: { text: string; here: boolean }[] = [
+  { text: 'Hjælp mig!', here: true },
+  { text: 'Kæmpe her!', here: true },
+  { text: 'Kom herhen', here: true },
+  { text: 'Pas på!', here: false },
+  { text: 'Godt skud!', here: false },
+  { text: 'Skal vi opgradere?', here: false },
+];
+
 /** Hændelser fra værten som gæsterne også skal se og høre */
 const FORWARD = new Set<HuntEvent['type']>([
   'giantSpawn', 'giantRoar', 'giantStep', 'giantWindup', 'giantSmash', 'giantFlinch', 'giantKneel', 'giantDeath', 'giantFell', 'giantRemoved',
@@ -51,6 +61,8 @@ export interface NetHooks {
   /** Svar på et køb i opgraderingsmenuen (gæst) */
   shopReply(ok: boolean, msg: string): void;
   note(text: string): void;
+  /** Hurtig besked fra en medspiller (nummer i QUICK_CHAT og hvor afsenderen var) */
+  chat(pid: number, i: number, pos: V3): void;
 }
 
 export function localState(h: Hunt): PState {
@@ -154,6 +166,13 @@ export class HostSync {
           if (r.ok) this.hooks.note(`${this.name(from)} købte: ${r.msg}`);
           break;
         }
+        case 'chat': {
+          const i = Number(msg.i) | 0;
+          if (i < 0 || i >= QUICK_CHAT.length || !Array.isArray(msg.p)) break;
+          this.hooks.chat(from, i, v3(msg.p as T3));
+          this.s.broadcast({ t: 'chat', pid: from, i, p: msg.p }, from);
+          break;
+        }
         case 'skip': if (h.phase === 'break') { h.skipBreak(); this.hooks.note(`${this.name(from)} startede bølgen`); } break;
         case 'left':
           h.remotes = h.remotes.filter((r) => r.pid !== from);
@@ -229,6 +248,9 @@ export class HostSync {
   }
 
   /** Medspillerne som de skal tegnes (bløde bevægelser) */
+  /** Værtens egen hurtige besked */
+  sendChat(i: number, pos: V3) { this.s.broadcast({ t: 'chat', pid: 0, i, p: t3(pos) }); }
+
   mates(dt: number): Mate[] {
     const out: Mate[] = [];
     for (const r of this.h.remotes) {
@@ -281,6 +303,7 @@ export class ClientSync {
         case 'hurt': h.hurtPlayer(Number(msg.dmg) || 0, msg.knock, msg.cause, msg.giantId, false, h.localPid); break;
         case 'shot': this.hooks.remoteShot(msg.pid, v3(msg.f), v3(msg.to), msg.w); break;
         case 'buyr': this.hooks.shopReply(!!msg.ok, String(msg.msg)); break;
+        case 'chat': if (Array.isArray(msg.p) && msg.i >= 0 && msg.i < QUICK_CHAT.length) this.hooks.chat(Number(msg.pid), Number(msg.i), v3(msg.p as T3)); break;
       }
     }
     return null;
@@ -381,6 +404,8 @@ export class ClientSync {
   }
 
   mates(): Mate[] { return this.mateBuf; }
+
+  sendChat(i: number, pos: V3) { this.s.send({ t: 'chat', i, p: t3(pos) }); }
 }
 
 /** Respawn-tid for en medspiller hos værten (gemt fra deres seneste besked) */

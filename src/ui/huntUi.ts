@@ -1,6 +1,6 @@
 // Brugerflade for Kæmpejagt: HUD (bølge, kæmper tilbage, liv, gas, ammo, krogens afstand, radar),
 // styrings-kort ved start og sejr-/nederlagsskærm. Al tekst er på dansk.
-import type { Mate } from '../net/sync';
+import { QUICK_CHAT, type Mate } from '../net/sync';
 import { HUNT } from '../config/hunt';
 import { WEAPONS } from '../config/weapons';
 import { BLOCKS, B } from '../core/blocks';
@@ -116,6 +116,15 @@ export class HuntUI {
   coop: 'host' | 'client' | null = null;
   /** Auto-skyd: sigtekornet er på en kæmpe (rødt sigtekorn) */
   autoLock = false;
+  /** Spil sammen: mikrofon-tilstand og om spilleren taler (null = ingen stemmechat) */
+  voiceState: ((pid: number) => { mic: number; talk: boolean }) | null = null;
+  /** Hurtige beskeder: menuen er åben */
+  chatOpen = false;
+  onChatPick: ((i: number) => void) | null = null;
+  private chatEl: HTMLElement | null = null;
+  private chatT = 0;
+  private feed: { e: HTMLElement; t: number }[] = [];
+  private pings: { x: number; z: number; color: string; t: number }[] = [];
   mates: Mate[] = [];
   myName = '';
 
@@ -162,7 +171,8 @@ export class HuntUI {
     H.dead = el('div', 'spec panel hidden');
     H.shopHint = el('div', 'shophint hidden');
     H.team = el('div', 'team panel hidden');
-    this.hud.append(H.speed, H.hurt, radarBox, H.team, H.wave, H.gate, H.boss, vitals, H.weapon, H.slots, H.cross, H.hook, H.hitm, H.pop, H.flight, H.warns, H.dirs, H.banner, H.note, H.shopHint, H.dead);
+    H.qfeed = el('div', 'qfeed');
+    this.hud.append(H.speed, H.hurt, radarBox, H.team, H.qfeed, H.wave, H.gate, H.boss, vitals, H.weapon, H.slots, H.cross, H.hook, H.hitm, H.pop, H.flight, H.warns, H.dirs, H.banner, H.note, H.shopHint, H.dead);
   }
 
   // ---------- Skærme ----------
@@ -252,6 +262,10 @@ export class HuntUI {
     this.h.dead.classList.add('hidden');
     this.h.team.classList.add('hidden');
     this.mates = [];
+    this.closeChat();
+    this.feed.forEach((f) => f.e.remove());
+    this.feed = [];
+    this.pings = [];
   }
 
   // ---------- Opgraderinger (mellem bølgerne) ----------
@@ -300,6 +314,36 @@ export class HuntUI {
     btns.append(go, close);
     c.append(btns);
     this.shop.append(c);
+  }
+
+  // ---------- Spil sammen: hurtige beskeder ----------
+
+  openChat() {
+    if (!this.chatEl) {
+      // Lægges øverst i #ui (over touch-laget), så knapperne kan trykkes
+      this.chatEl = el('div', 'qchat panel hidden');
+      this.chatEl.id = 'qchat';
+      document.getElementById('ui')!.append(this.chatEl);
+    }
+    this.chatEl.innerHTML = '';
+    QUICK_CHAT.forEach((q, i) => {
+      const b = el('button', 'btn', `${this.touch ? '' : `<span class="key">${i + 1}</span>`}${q.text}`);
+      b.onclick = (e) => { e.stopPropagation(); this.onChatPick?.(i); };
+      this.chatEl!.append(b);
+    });
+    this.chatEl.classList.remove('hidden');
+    this.chatOpen = true;
+    this.chatT = 5;
+  }
+  closeChat() { this.chatOpen = false; this.chatEl?.classList.add('hidden'); }
+
+  /** Vis en besked i feltet under holdlisten (og en markør på radaren) */
+  chatMsg(name: string, color: string, text: string, pos: { x: number; z: number } | null) {
+    const e = el('div', 'q', `<b style="color:${color}">${esc(name)}</b> ${esc(text)}`);
+    this.h.qfeed.append(e);
+    this.feed.push({ e, t: 6 });
+    while (this.feed.length > 4) this.feed.shift()!.e.remove();
+    if (pos) this.pings.push({ x: pos.x, z: pos.z, color, t: 7 });
   }
 
   private shopTimer(h: Hunt) {
@@ -503,6 +547,15 @@ export class HuntUI {
     H.dead.classList.toggle('hidden', p.alive);
     if (!p.alive) H.dead.innerHTML = this.coop && h.phase !== 'lost' && h.phase !== 'won' ? `Du er slået ud – tilbage om <b>${Math.max(1, Math.ceil(h.respawnT))} s</b>` : 'Du er faldet';
     this.drawTeam(h);
+    for (let i = this.feed.length - 1; i >= 0; i--) {
+      const f = this.feed[i];
+      f.t -= dt;
+      f.e.style.opacity = String(Math.min(1, f.t));
+      if (f.t <= 0) { f.e.remove(); this.feed.splice(i, 1); }
+    }
+    for (const p of this.pings) p.t -= dt;
+    this.pings = this.pings.filter((p) => p.t > 0);
+    if (this.chatOpen) { this.chatT -= dt; if (this.chatT <= 0) this.closeChat(); }
 
     this.drawRadar(h, viewYaw);
   }
@@ -512,11 +565,18 @@ export class HuntUI {
     const T = this.h.team;
     if (!this.coop) { T.classList.add('hidden'); return; }
     T.classList.remove('hidden');
+    const vs = this.voiceState;
+    const mic = (pid: number) => {
+      if (!vs) return '';
+      const v = vs(pid);
+      return v.mic === 1 ? `<span class="mic${v.talk ? ' talk' : ''}">${v.talk ? '🔊' : '🎤'}</span>` : v.mic === 2 ? '<span class="mic off">🔇</span>' : '';
+    };
     const row = (pid: number, name: string, hp: number, alive: boolean, rt: number, me: boolean) =>
-      `<div class="m${alive ? '' : ' down'}${me ? ' me' : ''}"><i style="background:${MATE_COLOR[pid % MATE_COLOR.length]}"></i><span class="n">${esc(name)}</span>` +
+      `<div class="m${alive ? '' : ' down'}${me ? ' me' : ''}"><i style="background:${MATE_COLOR[pid % MATE_COLOR.length]}"></i><span class="n">${esc(name)}</span>${mic(pid)}` +
       (alive ? `<span class="b"><u style="width:${Math.max(0, Math.min(100, hp))}%"></u></span>` : `<span class="d">NEDE${rt > 0 ? ` ${Math.ceil(rt)} s` : ''}</span>`) + '</div>';
     const p = h.player;
-    const html = row(h.localPid, this.myName || 'Dig', p.hp, p.alive, h.respawnT, true) + this.mates.map((m) => row(m.pid, m.name, m.hp, m.alive, m.respawn, false)).join('');
+    const html = row(h.localPid, this.myName || 'Dig', p.hp, p.alive, h.respawnT, true) + this.mates.map((m) => row(m.pid, m.name, m.hp, m.alive, m.respawn, false)).join('')
+      + (this.touch ? '' : '<div class="tk"><b>V</b> mikrofon · <b>T</b> beskeder</div>');
     if (T.innerHTML !== html) T.innerHTML = html;
   }
 
@@ -570,6 +630,15 @@ export class HuntUI {
       }, g.pos.x, g.pos.z);
     }
     for (const r of h.rocks) up(() => { ctx.fillStyle = '#ffd040'; ctx.fillRect(-2, -2, 4, 4); }, r.pos.x, r.pos.z);
+    // Markører fra hurtige beskeder ("Kæmpe her!")
+    for (const p of this.pings) up(() => {
+      const k = (performance.now() / 600) % 1;
+      ctx.strokeStyle = p.color; ctx.lineWidth = 2; ctx.globalAlpha = Math.min(1, p.t) * (1 - k);
+      ctx.beginPath(); ctx.arc(0, 0, 4 + k * 12, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = Math.min(1, p.t);
+      ctx.fillStyle = p.color; ctx.fillRect(-3, -3, 6, 6);
+      ctx.globalAlpha = 1;
+    }, p.x, p.z);
     // Medspillere
     for (const m of this.mates) {
       ctx.save();

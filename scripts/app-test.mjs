@@ -44,7 +44,8 @@ ok(true, 'Kæmpejagt (Saltvig) starter uden internet');
 // iPhone: Safari har ingen installér-dialog → knappen viser en vejledning
 const ip = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
 const p2 = await ip.newPage();
-await p2.goto(url);
+await page.close(); // (den første side tegner Kæmpejagt og sluger den langsomme testgrafik)
+await p2.goto(url, { timeout: 120000, waitUntil: 'domcontentloaded' });
 await p2.waitForFunction(() => !!window.__kk, null, { timeout: 90000 });
 ok(await p2.locator('#menu .btn.install').isVisible(), 'iPhone: knappen "Installér som app" vises');
 await p2.locator('#menu .btn.install').tap();

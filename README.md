@@ -20,6 +20,14 @@ Blokspil i browseren med to spiltyper, der vælges på startskærmen:
 - **Udvikling:** `npm install` og derefter `npm run dev`. `npm run build:app` bygger app-versionen i `dist/`.
   Hvert push til `main` på GitHub bygger og udgiver appen automatisk (`.github/workflows/pages.yml`).
 
+## Tal sammen (ny i v1.3)
+
+- **Stemmechat:** tryk **🎤 Tal sammen** i lobbyen (eller **V** / 🎤-knappen under spillet). Første gang spørger
+  telefonen om lov til mikrofonen. Man taler med alle, der også har slået det til. Tryk 🎤 igen for at slå sin
+  mikrofon fra (🔇). Holdlisten viser 🔊 ved den, der taler. **Brug høretelefoner** – så undgår I ekko.
+- **Hurtige beskeder:** **T** (eller 💬) og vælg: *Hjælp mig!*, *Kæmpe her!*, *Kom herhen* (viser hvor du er på
+  radaren), *Pas på!*, *Godt skud!*, *Skal vi opgradere?*. Beskeden ses hos alle under holdlisten.
+
 ## Ny åbning og skyd med hele højre side (ny i v1.2)
 
 - Spillet åbner med en titelskærm: kæmpen rejser sig bag bjergene i solnedgangen, og logoet falder ned klods for

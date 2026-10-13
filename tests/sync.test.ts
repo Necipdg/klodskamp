@@ -20,8 +20,8 @@ class FakeSession {
   kick() {}
 }
 
-const hooks = (): NetHooks & { shots: number; replies: string[] } => {
-  const o = { shots: 0, replies: [] as string[], remoteShot() { o.shots++; }, shopReply(_ok: boolean, m: string) { o.replies.push(m); }, note() {} };
+const hooks = (): NetHooks & { shots: number; replies: string[]; chats: [number, number][] } => {
+  const o = { shots: 0, replies: [] as string[], chats: [] as [number, number][], remoteShot() { o.shots++; }, shopReply(_ok: boolean, m: string) { o.replies.push(m); }, note() {}, chat(pid: number, i: number) { o.chats.push([pid, i]); } };
   return o;
 };
 
@@ -57,6 +57,15 @@ function pair() {
 }
 
 describe('Co-op: vært og gæst', () => {
+  test('hurtige beskeder går begge veje (med afsenderens nummer)', () => {
+    const { run, hsync, csync, hh, ch } = pair();
+    csync.sendChat(1, { x: 10, y: 1, z: 20 });
+    hsync.sendChat(4, { x: 0, y: 1, z: 0 });
+    run(0.1);
+    expect(hh.chats).toEqual([[1, 1]]);
+    expect(ch.chats).toEqual([[0, 4]]);
+  });
+
   test('gæsten ser værtens bølge og kæmper, og værten ser gæsten', () => {
     const { host, guest, run, guestEvents, hsync } = pair();
     host.phaseT = 0.3;
