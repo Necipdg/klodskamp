@@ -68,7 +68,9 @@ await frames(2);
 const y1 = await ev(() => window.__kk.hunt.player.yaw);
 ok(Math.abs(y1 - y0) > 0.05, 'kig ved at trække (samtidig med styrepinden)');
 await fUp(2); await fUp(1);
-// Auto-skyd (standard): højre side kigger uden at skyde – men sigter man på en kæmpe, skyder man af sig selv
+ok(await ev(() => window.__kk.settings.rightTouch === 'kig' && !window.__kk.touch.fireZone), 'standard for "Højre side (touch)" er "Kun kig"');
+// Auto-skyd: højre side kigger uden at skyde – men sigter man på en kæmpe, skyder man af sig selv
+await ev(() => { window.__kk.settings.rightTouch = 'auto'; });
 await frames(1);
 await ev(() => { window.__kk.hunt.player.primary.mag = 30; });
 await fDown(7, 520, 200);
@@ -96,6 +98,7 @@ ok(autoHit && await ev(() => document.querySelector('#hunthud .cross').classList
 await ev(() => { const h = window.__kk.hunt; h.giants = h.giants.filter((g) => g !== window.__autoG); h.player.pitch = 1.2; h.player.primary.mag = 30; });
 await frames(3);
 ok(await ev(() => window.__kk.hunt.player.primary.mag === 30 && !window.__kk.huntUi.autoLock), 'Auto-skyd: kig væk = stop');
+await ev(() => { window.__kk.settings.rightTouch = 'kig'; });
 // "Kig + skyd": hele højre side skyder – én finger
 await ev(() => { window.__kk.touch.fireZone = true; window.__kk.hunt.player.primary.mag = 30; });
 await fDown(7, 520, 200);

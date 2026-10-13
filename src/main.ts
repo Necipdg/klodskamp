@@ -1253,6 +1253,7 @@ window.__kk = {
     handleHuntEvents(hunt, hunt.drainEvents());
   },
   sendQuick: (i: number) => sendQuick(i),
+  settings,
   get voice() { return voice; },
   /** Co-op: hvem er jeg, og hvor mange er i rummet */
   coop: () => ({ role: net?.role ?? null, pid: net?.pid ?? -1, code: net?.code ?? '', players: net?.players.map((p) => p.name) ?? [], started: net?.started ?? false, mates: huntUi.mates.length }),

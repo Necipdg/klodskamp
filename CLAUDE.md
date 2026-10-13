@@ -113,6 +113,8 @@ Visuel kvalitetsreference: Nick Saraevs "Titan Siege" (attack-on-titancraft.netl
   🎤/🔊/🔇. Testet: 106 logik-tests + `coop-test.mjs` 36 tjek (Chromium med falsk mikrofon: lyd begge veje, lydniveau,
   🔇, beskeder). IKKE testet på rigtige telefoner: ekko, lydstyrke (iPhone kan skrue ned for spillets lyd, når mikrofonen
   er tændt) og mobilnet er ukendte.
+- v1.3.1 (13.10.2026): standard for "Højre side (touch)" er nu **Kun kig** (`rightTouch: 'kig'`). Ældre gemte indstillinger
+  sættes om én gang (`rtV` < 2 → 'kig'), derefter huskes brugerens eget valg. `__kk.settings` til tests.
 - Næste skridt: Necip prøver at spille sammen med familien. Mulige næste idéer: TURN-server hvis forbindelsen
   fejler på mobilnet, flere våben, co-op i taktisk kamp.
 

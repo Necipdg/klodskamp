@@ -33,8 +33,8 @@ Blokspil i browseren med to spiltyper, der vælges på startskærmen:
 - Spillet åbner med en titelskærm: kæmpen rejser sig bag bjergene i solnedgangen, og logoet falder ned klods for
   klods. Tryk for at spille (på telefonen går spillet samtidig i fuld skærm). På højkant vises samme scene med en
   drejende telefon.
-- **Telefon, Auto-skyd (standard fra v1.2.1):** træk på højre side for at kigge og sigte – i Kæmpejagt skyder du af dig
-  selv, så længe sigtekornet er rødt på en kæmpe. Indstillinger → Højre side (touch): *Auto-skyd*, *Kig + skyd*
+- **Telefon, højre side:** standard er *Kun kig* (fra v1.3.1): træk for at kigge og sigte, skyd med SKYD. Med *Auto-skyd*
+  skyder du i Kæmpejagt af dig selv, så længe sigtekornet er rødt på en kæmpe. Indstillinger → Højre side (touch): *Auto-skyd*, *Kig + skyd*
   (skyder hele tiden, mens fingeren er på højre side) eller *Kun kig* (skyd med SKYD-knappen).
 
 ## Skarpere billede på telefonen (ny i v1.1.1)
